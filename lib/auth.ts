@@ -1,5 +1,6 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import { encodeEmailToSecret } from "./utils";
 
 export const authOptions = {
   providers: [
@@ -27,6 +28,21 @@ export const authOptions = {
       }
       return true; 
     },
+    session: ({ session, token, user }: any) => {
+      if (session.user) {
+          session.user.uniqueID = encodeEmailToSecret(session.user.email);
+      }
+      return {
+        ...session,
+        user: {
+          ...session.user,
+          name: session.user.name,
+          email: session.user.email,
+          image: session.user.image,
+          uniqueID: session.user.uniqueID,
+        },
+      }
+  }
   },
   pages: {
     signIn: "/signin",

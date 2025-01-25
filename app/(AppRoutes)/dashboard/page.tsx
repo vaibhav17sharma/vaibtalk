@@ -1,4 +1,6 @@
+import FeatureCard from "@/components/common/FeatureCard";
 import { authOptions } from "@/lib/auth";
+import { MessageCircleMore, MonitorUp, Share, Video } from "lucide-react";
 import { getServerSession } from "next-auth";
 
 const Dashboard = async () => {
@@ -10,9 +12,20 @@ const Dashboard = async () => {
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="bg-gradient-to-r from-green-300 via-blue-500 to-purple-600 bg-clip-text text-3xl font-extrabold text-transparent sm:text-5xl">
             <span className="sm:block">
-              Heyyy {session?.user?.name || "There"} !
+              Heyy {session?.user?.name || "There"} !
             </span>
           </h2>
+          <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            {features.map((feature) => (
+              <FeatureCard
+                key={feature.key}
+                title={feature.title}
+                description={feature.description}
+                icon={feature.icon}
+                href={feature.url}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -20,3 +33,34 @@ const Dashboard = async () => {
 };
 
 export default Dashboard;
+
+const features = [
+  {
+    key: "1",
+    title: "Chat",
+    url: "/chat",
+    description: "Start a chat with your friends",
+    icon: <MessageCircleMore className="w-8 h-8" />,
+  },
+  {
+    key: "2",
+    title: "Video Call",
+    url: "/call",
+    description: "Make video calls with your friends",
+    icon: <Video className="w-8 h-8" />,
+  },
+  {
+    key: "3",
+    title: "File Transfer",
+    url: "/transfer",
+    description: "Transfer files with your friends",
+    icon: <Share className="w-8 h-8" />,
+  },
+  {
+    key: "4",
+    title: "Screen Share",
+    url: "/screenshare",
+    description: "Share your screen with your friends",
+    icon: <MonitorUp className="w-8 h-8" />,
+  },
+];
