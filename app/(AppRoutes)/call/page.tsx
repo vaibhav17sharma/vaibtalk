@@ -15,9 +15,8 @@ const Room = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
 
-
   const generateUniqueId = () => {
-    const id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const id = Math.random().toString(36).substring(2, 15);
     return id;
   }
 
@@ -72,7 +71,7 @@ const Room = () => {
         peer = new Peer(myUniqueId, {
           host: "localhost",
           port: 9000,
-          path: "/vaibtalk",
+          path: "/",
         });
 
         setPeerInstance(peer);
