@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+model User {
+  id               String       @id @default(uuid())
+  email            String       @unique
+  username         String       @unique
+  name             String
+  avatar           String?
+  bio              String?
+  profileCompleted Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  contacts         Contact[]    @relation("UserContacts")
+  contactOf        Contact[]    @relation("ContactUser")
+  sentMessages     Message[]    @relation("SenderMessages")
+  receivedMessages Message[]    @relation("ReceiverMessages")
+  UserSession      UserSession?
+
+  @@index([username])
+}
+
+model Contact {
+  id          String   @id @default(uuid())
+  userId      String
+  contactId   String
+  contactName String
+  nickname    String?
+  blocked     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user    User @relation("UserContacts", fields: [userId], references: [id], onDelete: Cascade)
+  contact User @relation("ContactUser", fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contactId])
+  @@index([userId])
+  @@index([contactId])
+  @@index([contactName])
+}
+
+model UserSession {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  isOnline  Boolean  @default(true)
+  lastSeen  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isOnline])
+}
+
+
+model Message {
+  id           String   @id @default(uuid())
+  content      String
+  type         String   @default("text")
+  fileUrl      String?
+  fileName     String?
+  fileSize     Int?
+  senderId     String
+  receiverId   String
+  senderName   String
+  receiverName String
+  read         Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime @default(dbgenerated("NOW() + interval '3 hours'"))
+
+  sender   User @relation("SenderMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceiverMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([senderName])
+  @@index([receiverName])
+  @@index([expiresAt])
+}
