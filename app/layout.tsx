@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import "@/style/globals.css";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Providers } from "./provider";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -35,10 +36,15 @@ export default function RootLayout({
           geistSans.variable
         )}
       >
-        <Appbar />
-        {children}
-        <Toaster />
+        <Providers>
+          <div>
+            <Appbar />
+            {children}
+            <Toaster />
+          </div>
+        </Providers>
       </body>
     </html>
   );
 }
+

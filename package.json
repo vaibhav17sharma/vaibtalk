@@ -10,6 +10,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.0.1",
+    "@prisma/client": "6.7.0",
     "@radix-ui/react-avatar": "^1.1.1",
     "@radix-ui/react-dialog": "^1.1.2",
     "@radix-ui/react-dropdown-menu": "^2.1.2",
@@ -17,18 +19,23 @@
     "@radix-ui/react-label": "^2.1.0",
     "@radix-ui/react-separator": "^1.1.0",
     "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-switch": "^1.2.4",
+    "@radix-ui/react-tabs": "^1.1.11",
+    "@reduxjs/toolkit": "^2.8.1",
+    "axios": "^1.9.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "emoji-picker-react": "^4.12.0",
     "framer-motion": "^11.11.10",
     "lucide-react": "^0.454.0",
-    "next": "15.0.2",
+    "next": "15.3.2",
     "next-auth": "^4.24.10",
     "next-themes": "^0.3.0",
     "peerjs": "^1.5.4",
-    "react": "^18",
-    "react-dom": "^18",
-    "recoil": "^0.7.7",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-hook-form": "^7.56.2",
+    "react-redux": "^9.2.0",
     "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
@@ -36,10 +43,26 @@
   },
   "devDependencies": {
     "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
+    "@types/react": "19.1.3",
+    "@types/react-dom": "19.1.3",
     "postcss": "^8",
+    "prisma": "6.7.0",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "19.1.3",
+      "@types/react-dom": "19.1.3"
+    },
+    "ignoredBuiltDependencies": [
+      "@prisma/engines",
+      "esbuild",
+      "sharp"
+    ],
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "prisma"
+    ]
   }
 }
