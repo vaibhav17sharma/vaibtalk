@@ -14,3 +14,41 @@ export function decodeSecretToEmail(secret: string): string {
   const encodedEmail = secret.slice(1, -1);
   return Buffer.from(encodedEmail, 'base64').toString('utf-8');
 }
+
+export function dateFormat(date: Date, formatStr: string): string {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+
+  const monthsFull = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const hours12 = date.getHours() % 12 || 12;
+  const ampm = date.getHours() < 12 ? 'AM' : 'PM';
+
+  const map: Record<string, string> = {
+    yyyy: date.getFullYear().toString(),
+    MM: pad(date.getMonth() + 1),
+    dd: pad(date.getDate()),
+    HH: pad(date.getHours()),
+    h: hours12.toString(),
+    mm: pad(date.getMinutes()),
+    ss: pad(date.getSeconds()),
+    a: ampm,
+    MMMM: monthsFull[date.getMonth()],
+  };
+
+  return formatStr.replace(/yyyy|MMMM|MM|dd|HH|h|mm|ss|a/g, match => map[match]);
+}
+
+export const flattenContacts = (contacts: any[]) => {
+  return contacts.map(c => ({
+    contactId: c.contactId,
+    contactName: c.contactName,
+    nickname: c.nickname,
+    blocked: c.blocked,
+    username: c.contact?.username,
+    avatar: c.contact?.avatar,
+    name: c.contact?.name,
+  }));
+}
