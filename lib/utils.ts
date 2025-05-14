@@ -43,6 +43,7 @@ export function dateFormat(date: Date, formatStr: string): string {
 
 export const flattenContacts = (contacts: any[]) => {
   return contacts.map(c => ({
+    id: c.id,
     contactId: c.contactId,
     contactName: c.contactName,
     nickname: c.nickname,

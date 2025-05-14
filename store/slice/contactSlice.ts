@@ -2,6 +2,7 @@ import { flattenContacts } from "@/lib/utils";
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 export interface Contact {
+  id: string;
   contactId: string;
   contactName: string;
   nickname?: string;
@@ -61,7 +62,7 @@ const contactSlice = createSlice({
       .addCase(fetchContacts.fulfilled, (state, action: PayloadAction<Contact[]>) => {
         state.loading = false;
         state.contacts = action.payload;
-        saveContactsToSessionStorage(action.payload); // Save contacts to sessionStorage
+        saveContactsToSessionStorage(action.payload);
       })
       .addCase(fetchContacts.rejected, (state, action) => {
         state.loading = false;

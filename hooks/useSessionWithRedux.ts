@@ -10,7 +10,7 @@ export const useSessionWithRedux = () => {
   useEffect(() => {
     if (status === "loading") {
       dispatch(setStatus("loading"));
-    } else if (status === "authenticated") {
+    } else if (status === "authenticated" && session) {
       dispatch(setSession(session));
     } else if (status === "unauthenticated") {
       dispatch(setSession(null));

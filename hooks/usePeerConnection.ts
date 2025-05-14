@@ -36,12 +36,21 @@ export default function usePeerConnection(
   callbacks?: Callbacks
 ) {
   const dispatch = useAppDispatch();
+
   const peer = useAppSelector((state: RootState) => state.peer.peer);
   const peerId = useAppSelector((state: RootState) => state.peer.peerId);
-  const connections = useAppSelector((state: RootState) => state.peer.connections);
-  const mediaConnections = useAppSelector((state: RootState) => state.peer.mediaConnections);
-  const activeMediaType = useAppSelector((state: RootState) => state.peer.activeMediaType);
-  const connectionStatus = useAppSelector((state: RootState) => state.peer.connectionStatus);
+  const connections = useAppSelector(
+    (state: RootState) => state.peer.connections
+  );
+  const mediaConnections = useAppSelector(
+    (state: RootState) => state.peer.mediaConnections
+  );
+  const activeMediaType = useAppSelector(
+    (state: RootState) => state.peer.activeMediaType
+  );
+  const connectionStatus = useAppSelector(
+    (state: RootState) => state.peer.connectionStatus
+  );
 
   const localMediaStreamRef = useRef<MediaStream | null>(null);
   const mediaConnectionsRef = useRef<{ [peerId: string]: MediaConnection }>({});
@@ -103,10 +112,13 @@ export default function usePeerConnection(
     const handleCall = (call: MediaConnection) => {
       const answerCall = async () => {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true,
+          });
           call.answer(stream);
           dispatch(addMediaConnection(call));
-          
+
           call.on("stream", (remoteStream) => {
             callbacks?.onStream?.(call.peer, remoteStream);
             dispatch(setActiveMediaType({ peerId: call.peer, type: "video" }));
@@ -116,7 +128,6 @@ export default function usePeerConnection(
             dispatch(removeMediaConnection(call.peer));
             callbacks?.onMediaChange?.(call.peer, "none");
           });
-
         } catch (error) {
           console.error("Failed to answer call:", error);
           call.close();
@@ -170,9 +181,13 @@ export default function usePeerConnection(
       }
 
       try {
-        const stream = mediaType === "video"
-          ? await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-          : await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const stream =
+          mediaType === "video"
+            ? await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: true,
+              })
+            : await navigator.mediaDevices.getDisplayMedia({ video: true });
 
         localMediaStreamRef.current = stream;
         const call = peer.call(targetId, stream);
@@ -209,7 +224,9 @@ export default function usePeerConnection(
         callbacks?.onMediaChange?.(targetId, "none");
       }
       if (localMediaStreamRef.current) {
-        localMediaStreamRef.current.getTracks().forEach(track => track.stop());
+        localMediaStreamRef.current
+          .getTracks()
+          .forEach((track) => track.stop());
         localMediaStreamRef.current = null;
       }
     },
