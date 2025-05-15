@@ -1,184 +1,234 @@
 "use client";
 
+import peerManager from "@/store/peerManager";
+import { addMessage } from "@/store/slice/chatbookSlice";
 import {
-  addChatMessage,
   addConnection,
   addMediaConnection,
   appendFileChunk,
   clearMessageQueue,
   enqueueMessage,
   finalizeFile,
-  initializePeer,
   removeConnection,
   removeMediaConnection,
   setActiveMediaType,
+  setConnectionStatus,
   setFileMeta,
-  setStatus,
+  setPeerId,
 } from "@/store/slice/peerSlice";
 import type { RootState } from "@/store/store";
-import { DataConnection, MediaConnection } from "peerjs";
+import Peer, { DataConnection } from "peerjs";
 import { useCallback, useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "./useRedux";
 
 export type FileMeta = { isMeta: true; fileName: string; fileSize: number };
 export type PeerMessageType = string | ArrayBuffer | FileMeta | "__end__";
 
-type Callbacks = {
-  onConnect?: (peerID: string) => void;
-  onMessage?: (msg: PeerMessageType, peerID: string) => void;
-  onDisconnect?: (peerID: string) => void;
+type MediaCallbacks = {
   onStream?: (peerID: string, stream: MediaStream) => void;
   onMediaChange?: (peerID: string, type: "none" | "video" | "screen") => void;
 };
 
 export default function usePeerConnection(
   uniqueID: string,
-  callbacks?: Callbacks
+  mediaCallbacks?: MediaCallbacks
 ) {
   const dispatch = useAppDispatch();
-
-  const peer = useAppSelector((state: RootState) => state.peer.peer);
   const peerId = useAppSelector((state: RootState) => state.peer.peerId);
-  const connections = useAppSelector(
-    (state: RootState) => state.peer.connections
-  );
-  const mediaConnections = useAppSelector(
-    (state: RootState) => state.peer.mediaConnections
+  const connectionStatus = useAppSelector(
+    (state: RootState) => state.peer.connectionStatus
   );
   const activeMediaType = useAppSelector(
     (state: RootState) => state.peer.activeMediaType
   );
-  const connectionStatus = useAppSelector(
-    (state: RootState) => state.peer.connectionStatus
-  );
 
   const localMediaStreamRef = useRef<MediaStream | null>(null);
-  const mediaConnectionsRef = useRef<{ [peerId: string]: MediaConnection }>({});
 
-  // Initialize peer connection
+  // For media callbacks only (not for chat messages)
+  const mediaCallbacksRef = useRef<MediaCallbacks | undefined>(mediaCallbacks);
   useEffect(() => {
-    if (!peer && uniqueID) {
-      dispatch(initializePeer(uniqueID));
-    }
-  }, [uniqueID, peer, dispatch]);
+    mediaCallbacksRef.current = mediaCallbacks;
+  }, [mediaCallbacks]);
 
-  // Setup data connection handlers
+  // Setup incoming data connection
   const setupConnection = useCallback(
     (conn: DataConnection) => {
-      dispatch(addConnection(conn));
+      console.log("[usePeerConnection] Setting up connection with:", conn.peer);
+
+      peerManager.addConnection(conn);
+      dispatch(addConnection(conn.peer));
 
       conn.on("open", () => {
-        dispatch(setStatus("connected"));
-        callbacks?.onConnect?.(conn.peer);
-        const queued: any = [];
-        queued.forEach((msg: any) => conn.send(msg));
+        console.log("[usePeerConnection] Connection open with:", conn.peer);
+        dispatch(setConnectionStatus("connected"));
         dispatch(clearMessageQueue(conn.peer));
       });
 
+      conn.on("data", (data: unknown) => {
+        console.log("[usePeerConnection] Received data from", conn.peer, data);
+        if (conn.peer === uniqueID) return; // Ignore self-sent messages
+        // --- Redux chat message dispatch ---
+        if (typeof data === "string") {
+          dispatch(
+            addMessage({
+              sender: conn.peer,
+              receiver: uniqueID,
+              content: data,
+              type: "text",
+            })
+          );
+        } else if (data instanceof ArrayBuffer) {
+          dispatch(appendFileChunk({ from: conn.peer, chunk: data }));
+          // File chunks are handled in peerSlice; message is added on finalize
+        } else if (typeof data === "object" && (data as any)?.isMeta) {
+          const meta = data as FileMeta;
+          dispatch(setFileMeta({ from: conn.peer, meta }));
+        } else if (data === "__end__") {
+          dispatch(finalizeFile({ from: conn.peer }));
+        }
+        // --- End Redux chat message dispatch ---
+      });
+
       conn.on("close", () => {
+        console.log("[usePeerConnection] Connection closed with:", conn.peer);
+        peerManager.removeConnection(conn.peer);
         dispatch(removeConnection(conn.peer));
-        callbacks?.onDisconnect?.(conn.peer);
       });
 
       conn.on("error", (err) => {
-        console.error("Connection error:", err);
-        dispatch(setStatus("disconnected"));
-      });
-
-      conn.on("data", (data: unknown) => {
-        if (data === "__end__") {
-          dispatch(finalizeFile({ from: conn.peer }));
-          callbacks?.onMessage?.("__end__", conn.peer);
-        } else if (typeof data === "string") {
-          dispatch(addChatMessage({ from: conn.peer, message: data }));
-          callbacks?.onMessage?.(data, conn.peer);
-        } else if (data instanceof ArrayBuffer) {
-          dispatch(appendFileChunk({ from: conn.peer, chunk: data }));
-          callbacks?.onMessage?.(data, conn.peer);
-        } else if (typeof data === "object" && (data as any).isMeta) {
-          const meta = data as FileMeta;
-          dispatch(setFileMeta({ from: conn.peer, meta }));
-          callbacks?.onMessage?.(meta, conn.peer);
-        }
+        console.error("[usePeerConnection] Connection error:", err);
+        dispatch(setConnectionStatus("disconnected"));
       });
     },
-    [dispatch, callbacks]
+    [dispatch, uniqueID]
   );
 
-  // Handle incoming media connections
+  // Setup peer and listeners
   useEffect(() => {
-    if (!peer) return;
+    if (!peerManager.peer && uniqueID) {
+      console.log(
+        "[usePeerConnection] Creating Peer instance with ID:",
+        uniqueID
+      );
+      const peer = new Peer(uniqueID, {
+        host: "192.168.31.111",
+        port: 9000,
+        path: "/peer-server/vaibtalk",
+        secure: false,
+        config: {
+          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        },
+      });
 
-    const handleCall = (call: MediaConnection) => {
-      const answerCall = async () => {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
-          });
-          call.answer(stream);
-          dispatch(addMediaConnection(call));
+      peerManager.peer = peer;
 
-          call.on("stream", (remoteStream) => {
-            callbacks?.onStream?.(call.peer, remoteStream);
-            dispatch(setActiveMediaType({ peerId: call.peer, type: "video" }));
-          });
+      peer.on("open", (id) => {
+        console.log("[usePeerConnection] Peer open with ID:", id);
+        dispatch(setPeerId(id));
+      });
 
-          call.on("close", () => {
-            dispatch(removeMediaConnection(call.peer));
-            callbacks?.onMediaChange?.(call.peer, "none");
-          });
-        } catch (error) {
-          console.error("Failed to answer call:", error);
+      peer.on("connection", (conn) => {
+        console.log("[usePeerConnection] Incoming connection from:", conn.peer);
+        peerManager.addConnection(conn); // Always replace with the latest
+        dispatch(addConnection(conn.peer));
+        setupConnection(conn);
+      });
+
+      peer.on("call", (call) => {
+        console.log("[usePeerConnection] Incoming media call from:", call.peer);
+        if (peerManager.hasMediaConnection(call.peer)) {
+          console.log(
+            "[usePeerConnection] Already have media connection with",
+            call.peer,
+            "- closing duplicate."
+          );
           call.close();
+          return;
         }
-      };
 
-      // For screen sharing, you might want different handling
-      if (!mediaConnections[call.peer]) {
+        const answerCall = async () => {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: true,
+            });
+            call.answer(stream);
+            peerManager.addMediaConnection(call);
+            dispatch(addMediaConnection(call.peer));
+
+            call.on("stream", (remoteStream) => {
+              console.log(
+                "[usePeerConnection] Received remote media stream from:",
+                call.peer
+              );
+              mediaCallbacksRef.current?.onStream?.(call.peer, remoteStream);
+              dispatch(
+                setActiveMediaType({ peerId: call.peer, type: "video" })
+              );
+            });
+
+            call.on("close", () => {
+              console.log(
+                "[usePeerConnection] Media call closed with:",
+                call.peer
+              );
+              peerManager.removeMediaConnection(call.peer);
+              dispatch(removeMediaConnection(call.peer));
+              mediaCallbacksRef.current?.onMediaChange?.(call.peer, "none");
+            });
+          } catch (error) {
+            console.error("[usePeerConnection] Failed to answer call:", error);
+            call.close();
+          }
+        };
+
         answerCall();
-      }
-    };
 
-    peer.on("call", handleCall);
-    return () => {
-      peer.off("call", handleCall);
-    };
-  }, [peer, mediaConnections, dispatch, callbacks]);
+        return () => {
+          peerManager.reset();
+        };
+      });
+    }
+  }, [uniqueID, setupConnection, dispatch]);
 
-  // Connection management
   const connect = useCallback(
     (targetId: string) => {
-      if (!peer || connections[targetId]) return;
-      dispatch(setStatus("connecting"));
-      const conn = peer.connect(targetId);
+      if (!peerManager.peer) {
+        console.warn("[usePeerConnection] No Peer instance available");
+        return;
+      }
+      if (peerManager.hasConnection(targetId)) {
+        console.log("[usePeerConnection] Already connected to", targetId);
+        return;
+      }
+      dispatch(setConnectionStatus("connecting"));
+      console.log("[usePeerConnection] Connecting to peer:", targetId);
+      const conn = peerManager.peer.connect(targetId);
       setupConnection(conn);
     },
-    [peer, connections, dispatch, setupConnection]
+    [dispatch, setupConnection]
   );
 
   const disconnect = useCallback(
     (targetId: string) => {
-      const conn = connections[targetId];
-      if (conn) {
-        conn.close();
-        dispatch(removeConnection(targetId));
-      }
+      console.log("[usePeerConnection] Disconnecting from peer:", targetId);
+      peerManager.removeConnection(targetId);
+      dispatch(removeConnection(targetId));
       endMedia(targetId);
     },
-    [connections, dispatch]
+    [dispatch]
   );
 
-  // Media handling
   const switchMedia = useCallback(
     async (targetId: string, mediaType: "video" | "screen") => {
-      if (!peer || !connections[targetId]) return;
-
-      // End existing media connection
-      if (mediaConnectionsRef.current[targetId]) {
-        mediaConnectionsRef.current[targetId].close();
-        dispatch(removeMediaConnection(targetId));
+      if (!peerManager.peer || !peerManager.hasConnection(targetId)) {
+        console.warn(
+          "[usePeerConnection] Cannot switch media, missing peer or connection"
+        );
+        return;
       }
+      peerManager.removeMediaConnection(targetId);
+      dispatch(removeMediaConnection(targetId));
 
       try {
         const stream =
@@ -190,39 +240,43 @@ export default function usePeerConnection(
             : await navigator.mediaDevices.getDisplayMedia({ video: true });
 
         localMediaStreamRef.current = stream;
-        const call = peer.call(targetId, stream);
-        mediaConnectionsRef.current[targetId] = call;
-
-        dispatch(addMediaConnection(call));
+        const call = peerManager.peer.call(targetId, stream);
+        peerManager.addMediaConnection(call);
+        dispatch(addMediaConnection(targetId));
         dispatch(setActiveMediaType({ peerId: targetId, type: mediaType }));
-        callbacks?.onMediaChange?.(targetId, mediaType);
+        mediaCallbacksRef.current?.onMediaChange?.(targetId, mediaType);
 
         call.on("stream", (remoteStream) => {
-          callbacks?.onStream?.(targetId, remoteStream);
+          console.log(
+            "[usePeerConnection] Received remote stream from:",
+            targetId
+          );
+          mediaCallbacksRef.current?.onStream?.(targetId, remoteStream);
         });
 
         call.on("close", () => {
+          console.log("[usePeerConnection] Media call closed with:", targetId);
+          peerManager.removeMediaConnection(targetId);
           dispatch(removeMediaConnection(targetId));
-          callbacks?.onMediaChange?.(targetId, "none");
+          mediaCallbacksRef.current?.onMediaChange?.(targetId, "none");
         });
 
         return call;
-      } catch (error) {
-        console.error("Error starting media:", error);
+      } catch (err) {
+        console.error("[usePeerConnection] Error switching media:", err);
         dispatch(setActiveMediaType({ peerId: targetId, type: "none" }));
       }
     },
-    [peer, connections, dispatch, callbacks]
+    [dispatch]
   );
 
   const endMedia = useCallback(
     (targetId: string) => {
-      const call = mediaConnectionsRef.current[targetId];
-      if (call) {
-        call.close();
-        dispatch(removeMediaConnection(targetId));
-        callbacks?.onMediaChange?.(targetId, "none");
-      }
+      console.log("[usePeerConnection] Ending media with:", targetId);
+      peerManager.removeMediaConnection(targetId);
+      dispatch(removeMediaConnection(targetId));
+      mediaCallbacksRef.current?.onMediaChange?.(targetId, "none");
+
       if (localMediaStreamRef.current) {
         localMediaStreamRef.current
           .getTracks()
@@ -230,45 +284,81 @@ export default function usePeerConnection(
         localMediaStreamRef.current = null;
       }
     },
-    [dispatch, callbacks]
+    [dispatch]
   );
 
-  // Messaging
   const sendMessage = useCallback(
     (message: string, toPeerId: string) => {
-      const conn = connections[toPeerId];
+      const conn = peerManager.getConnection(toPeerId);
+      console.log(
+        "[usePeerConnection] sendMessage",
+        message,
+        "to",
+        toPeerId,
+      );
       if (conn?.open) {
         conn.send(message);
+        console.log("[usePeerConnection] Message sent to", toPeerId);
+        // Also add to Redux (as outgoing message)
+        dispatch(
+          addMessage({
+            sender: uniqueID,
+            receiver: toPeerId,
+            content: message,
+            type: "text",
+          })
+        );
       } else {
+        console.warn(
+          "[usePeerConnection] Connection not open, queueing message for",
+          toPeerId
+        );
         dispatch(enqueueMessage({ toPeerId, message }));
       }
     },
-    [connections, dispatch]
+    [dispatch, uniqueID]
   );
 
   const sendFile = useCallback(
     (file: File, toPeerId: string) => {
-      const conn = connections[toPeerId];
-      if (!conn?.open) return false;
+      const conn = peerManager.getConnection(toPeerId);
+      if (!conn?.open) {
+        console.warn(
+          "[usePeerConnection] Cannot send file, connection not open for",
+          toPeerId
+        );
+        return false;
+      }
 
       const chunkSize = 16 * 1024;
       let offset = 0;
 
-      conn.send({
-        isMeta: true,
-        fileName: file.name,
-        fileSize: file.size,
-      });
+      // Send file meta
+      conn.send({ isMeta: true, fileName: file.name, fileSize: file.size });
 
       const sendChunk = () => {
         const slice = file.slice(offset, offset + chunkSize);
         const reader = new FileReader();
-
         reader.onload = () => {
           if (reader.result instanceof ArrayBuffer) {
             conn.send(reader.result);
             offset += chunkSize;
-            offset < file.size ? sendChunk() : conn.send("__end__");
+            if (offset < file.size) {
+              sendChunk();
+            } else {
+              conn.send("__end__");
+              // Add to Redux as outgoing file message
+              const url = URL.createObjectURL(file);
+              dispatch(
+                addMessage({
+                  sender: uniqueID,
+                  receiver: toPeerId,
+                  content: { file, url },
+                  type: "file",
+                })
+              );
+              console.log("[usePeerConnection] File sent to", toPeerId);
+            }
           }
         };
         reader.readAsArrayBuffer(slice);
@@ -277,14 +367,12 @@ export default function usePeerConnection(
       sendChunk();
       return true;
     },
-    [connections]
+    [dispatch, uniqueID]
   );
 
   return {
     peerId,
-    connections,
     connectionStatus,
-    mediaConnections,
     activeMediaType,
     connect,
     disconnect,
