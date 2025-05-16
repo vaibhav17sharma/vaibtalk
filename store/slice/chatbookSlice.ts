@@ -1,7 +1,7 @@
 import { generateUUIDv4 } from "@/lib/utils";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
-export type MessageContent = string | { file: File; url: string };
+export type MessageContent = string | { size: number|string; url: string, name: string, type: string };
 
 export interface Message {
   id: string;
