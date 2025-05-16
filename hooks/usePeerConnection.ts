@@ -353,7 +353,7 @@ export default function usePeerConnection(
                 addMessage({
                   sender: uniqueID,
                   receiver: toPeerId,
-                  content: { file, url },
+                  content: { url, name: file.name, size: file.size, type: file.type },
                   type: "file",
                 })
               );
