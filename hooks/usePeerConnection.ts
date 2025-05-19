@@ -1,20 +1,24 @@
 "use client";
 
 import peerManager from "@/store/peerManager";
-import { addMessage } from "@/store/slice/chatbookSlice";
+import {
+  addMessage,
+  updateMessageByTransferId,
+} from "@/store/slice/chatbookSlice";
 import {
   addConnection,
   addMediaConnection,
-  appendFileChunk,
+  cancelFileTransfer,
   clearMessageQueue,
+  completeFileTransfer,
   enqueueMessage,
-  finalizeFile,
   removeConnection,
   removeMediaConnection,
   setActiveMediaType,
   setConnectionStatus,
-  setFileMeta,
   setPeerId,
+  startFileTransfer,
+  updateTransferProgress,
 } from "@/store/slice/peerSlice";
 import type { RootState } from "@/store/store";
 import Peer, { DataConnection } from "peerjs";
@@ -44,13 +48,11 @@ export default function usePeerConnection(
 
   const localMediaStreamRef = useRef<MediaStream | null>(null);
 
-  // For media callbacks only (not for chat messages)
   const mediaCallbacksRef = useRef<MediaCallbacks | undefined>(mediaCallbacks);
   useEffect(() => {
     mediaCallbacksRef.current = mediaCallbacks;
   }, [mediaCallbacks]);
 
-  // Setup incoming data connection
   const setupConnection = useCallback(
     (conn: DataConnection) => {
       console.log("[usePeerConnection] Setting up connection with:", conn.peer);
@@ -64,11 +66,92 @@ export default function usePeerConnection(
         dispatch(clearMessageQueue(conn.peer));
       });
 
-      conn.on("data", (data: unknown) => {
-        console.log("[usePeerConnection] Received data from", conn.peer, data);
-        if (conn.peer === uniqueID) return; // Ignore self-sent messages
-        // --- Redux chat message dispatch ---
-        if (typeof data === "string") {
+      conn.on("data", async (data: any) => {
+        console.log(
+          "[usePeerConnection] Received data from",
+          conn.peer,
+          data?.type
+        );
+        if (conn.peer === uniqueID) return;
+        if (data?.type === "file-metadata") {
+          const transferId = data.transferId;
+
+          dispatch(
+            addMessage({
+              sender: conn.peer,
+              receiver: uniqueID,
+              content: {
+                transferId: data.transferId,
+                name: data.fileName,
+                size: data.fileSize,
+                status: "pending",
+                type: data.mimeType,
+              },
+              type: "file",
+            })
+          );
+
+          dispatch(
+            startFileTransfer({
+              transferId,
+              peerId: conn.peer,
+              direction: "incoming",
+              fileName: data.fileName,
+              fileSize: data.fileSize,
+            })
+          );
+
+          peerManager.startFileTransfer(transferId, {
+            peerId: conn.peer,
+            direction: "incoming",
+            fileName: data.fileName,
+            fileSize: data.fileSize,
+            mimeType: data.mimeType,
+          });
+        } else if (data?.type === "file-chunk") {
+          const transferId = data.transferId;
+
+          const transfer = peerManager.getTransfer(transferId);
+          if (!transfer || !transfer.meta) return 0;
+
+          const chunk = data.chunk;
+
+          peerManager.appendFileChunk(transferId, chunk);
+
+          const receivedBytes = transfer.chunks.reduce(
+            (acc, c) => acc + c.byteLength,
+            0
+          );
+          const progress = (receivedBytes / transfer.meta.fileSize) * 100;
+
+          dispatch(
+            updateTransferProgress({
+              transferId,
+              progress: Math.min(100, progress),
+            })
+          );
+
+          if (receivedBytes >= transfer.meta!.fileSize) {
+            dispatch(completeFileTransfer(data.transferId));
+            dispatch(
+              updateMessageByTransferId({
+                sender: conn.peer,
+                receiver: uniqueID,
+                transferId: data.transferId,
+                updatedFields: {
+                  content: {
+                    transferId: data.transferId,
+                    size: transfer.meta!.fileSize,
+                    name: transfer.meta!.fileName,
+                    type: transfer.meta!.mimeType as string,
+                    progress,
+                    status: "completed",
+                  },
+                },
+              })
+            );
+          }
+        } else if (typeof data === "string") {
           dispatch(
             addMessage({
               sender: conn.peer,
@@ -77,16 +160,7 @@ export default function usePeerConnection(
               type: "text",
             })
           );
-        } else if (data instanceof ArrayBuffer) {
-          dispatch(appendFileChunk({ from: conn.peer, chunk: data }));
-          // File chunks are handled in peerSlice; message is added on finalize
-        } else if (typeof data === "object" && (data as any)?.isMeta) {
-          const meta = data as FileMeta;
-          dispatch(setFileMeta({ from: conn.peer, meta }));
-        } else if (data === "__end__") {
-          dispatch(finalizeFile({ from: conn.peer }));
         }
-        // --- End Redux chat message dispatch ---
       });
 
       conn.on("close", () => {
@@ -103,7 +177,6 @@ export default function usePeerConnection(
     [dispatch, uniqueID]
   );
 
-  // Setup peer and listeners
   useEffect(() => {
     if (!peerManager.peer && uniqueID) {
       console.log(
@@ -290,16 +363,10 @@ export default function usePeerConnection(
   const sendMessage = useCallback(
     (message: string, toPeerId: string) => {
       const conn = peerManager.getConnection(toPeerId);
-      console.log(
-        "[usePeerConnection] sendMessage",
-        message,
-        "to",
-        toPeerId,
-      );
+      console.log("[usePeerConnection] sendMessage", message, "to", toPeerId);
       if (conn?.open) {
         conn.send(message);
         console.log("[usePeerConnection] Message sent to", toPeerId);
-        // Also add to Redux (as outgoing message)
         dispatch(
           addMessage({
             sender: uniqueID,
@@ -320,7 +387,7 @@ export default function usePeerConnection(
   );
 
   const sendFile = useCallback(
-    (file: File, toPeerId: string) => {
+    async (file: File, toPeerId: string) => {
       const conn = peerManager.getConnection(toPeerId);
       if (!conn?.open) {
         console.warn(
@@ -329,45 +396,61 @@ export default function usePeerConnection(
         );
         return false;
       }
+      const transferId = `${peerId}-${Date.now()}`;
+      const CHUNK_SIZE = 16 * 1024;
 
-      const chunkSize = 16 * 1024;
-      let offset = 0;
+      dispatch(
+        startFileTransfer({
+          transferId,
+          peerId: toPeerId,
+          direction: "outgoing",
+          fileName: file.name,
+          fileSize: file.size,
+        })
+      );
 
-      // Send file meta
-      conn.send({ isMeta: true, fileName: file.name, fileSize: file.size });
+      try {
+        conn.send({
+          type: "file-metadata",
+          transferId,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+        });
 
-      const sendChunk = () => {
-        const slice = file.slice(offset, offset + chunkSize);
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (reader.result instanceof ArrayBuffer) {
-            conn.send(reader.result);
-            offset += chunkSize;
-            if (offset < file.size) {
-              sendChunk();
-            } else {
-              conn.send("__end__");
-              // Add to Redux as outgoing file message
-              const url = URL.createObjectURL(file);
-              dispatch(
-                addMessage({
-                  sender: uniqueID,
-                  receiver: toPeerId,
-                  content: { url, name: file.name, size: file.size, type: file.type },
-                  type: "file",
-                })
-              );
-              console.log("[usePeerConnection] File sent to", toPeerId);
-            }
-          }
-        };
-        reader.readAsArrayBuffer(slice);
-      };
+        let offset = 0;
+        while (offset < file.size) {
+          const chunk = file.slice(offset, offset + CHUNK_SIZE);
+          const arrayBuffer = await chunk.arrayBuffer();
+          
+          await new Promise(resolve => setTimeout(resolve, 2000));
 
-      sendChunk();
-      return true;
+          conn.send({
+            type: "file-chunk",
+            transferId,
+            chunk: arrayBuffer,
+            offset,
+          });
+
+          offset += CHUNK_SIZE;
+          const progress = Math.min(100, (offset / file.size) * 100);
+
+          dispatch(
+            updateTransferProgress({
+              transferId,
+              progress,
+            })
+          );
+        }
+
+        dispatch(completeFileTransfer(transferId));
+        return true;
+      } catch (error) {
+        dispatch(cancelFileTransfer(transferId));
+        return false;
+      }
     },
-    [dispatch, uniqueID]
+    [dispatch, peerId]
   );
 
   return {
