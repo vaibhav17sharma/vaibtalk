@@ -5,7 +5,17 @@ class PeerManager {
   private _connections: Map<string, DataConnection> = new Map();
   private _mediaConnections: Map<string, MediaConnection> = new Map();
 
-  // Accessor for PeerJS instance
+  private _fileTransfers = new Map<
+    string,
+    {
+      peerId: string;
+      direction: "incoming" | "outgoing";
+      chunks: ArrayBuffer[];
+      meta?: { fileName: string; fileSize: number; mimeType?: string };
+      abortController?: AbortController;
+    }
+  >();
+
   get peer(): Peer | null {
     return this._peer;
   }
@@ -15,13 +25,72 @@ class PeerManager {
     console.log("[PeerManager] Peer instance set:", newPeer?.id);
   }
 
+  getTransfer(transferId: string) {
+    return this._fileTransfers.get(transferId);
+  }
+
+  startFileTransfer(
+    transferId: string,
+    config: {
+      peerId: string;
+      direction: "incoming" | "outgoing";
+      fileName?: string;
+      fileSize?: number;
+      mimeType?: string;
+    }
+  ) {
+    this._fileTransfers.set(transferId, {
+      peerId: config.peerId,
+      direction: config.direction,
+      chunks: [],
+      meta: config.fileName
+        ? {
+            fileName: config.fileName,
+            fileSize: config.fileSize || 0,
+            mimeType: config.mimeType,
+          }
+        : undefined,
+      abortController:
+        config.direction === "outgoing" ? new AbortController() : undefined,
+    });
+  }
+
+  appendFileChunk(transferId: string, chunk: ArrayBuffer): void {
+    const transfer = this._fileTransfers.get(transferId);
+    if (transfer) {
+      transfer.chunks.push(chunk);
+    }
+  }
+
+  finalizeFileTransfer(transferId: string): File | null {
+    const transfer = this._fileTransfers.get(transferId);
+    if (!transfer || !transfer.meta) return null;
+
+    const blob = new Blob(transfer.chunks);
+    const file = new File([blob], transfer.meta.fileName, {
+      type: transfer.meta.mimeType,
+      lastModified: Date.now()
+    });
+
+    this._fileTransfers.delete(transferId);
+    return file;
+  }
+
+  cancelFileTransfer(transferId: string): void {
+    const transfer = this._fileTransfers.get(transferId);
+    transfer?.abortController?.abort();
+    this._fileTransfers.delete(transferId);
+  }
+
   getConnection(peerId: string): DataConnection | undefined {
     return this._connections.get(peerId);
   }
 
   addConnection(conn: DataConnection): void {
     this._connections.set(conn.peer, conn);
-    console.log(`[PeerManager] Added/Updated DataConnection for peer: ${conn.peer}`);
+    console.log(
+      `[PeerManager] Added/Updated DataConnection for peer: ${conn.peer}`
+    );
   }
 
   removeConnection(peerId: string): void {
@@ -51,7 +120,9 @@ class PeerManager {
       this._mediaConnections.set(call.peer, call);
       console.log(`[PeerManager] Added MediaConnection for peer: ${call.peer}`);
     } else {
-      console.log(`[PeerManager] MediaConnection for peer ${call.peer} already exists`);
+      console.log(
+        `[PeerManager] MediaConnection for peer ${call.peer} already exists`
+      );
     }
   }
 
@@ -75,13 +146,17 @@ class PeerManager {
 
   reset(): void {
     this._connections.forEach((conn, peerId) => {
-      console.log(`[PeerManager] Reset: Closing DataConnection for peer: ${peerId}`);
+      console.log(
+        `[PeerManager] Reset: Closing DataConnection for peer: ${peerId}`
+      );
       conn.close();
     });
     this._connections.clear();
 
     this._mediaConnections.forEach((call, peerId) => {
-      console.log(`[PeerManager] Reset: Closing MediaConnection for peer: ${peerId}`);
+      console.log(
+        `[PeerManager] Reset: Closing MediaConnection for peer: ${peerId}`
+      );
       call.close();
     });
     this._mediaConnections.clear();

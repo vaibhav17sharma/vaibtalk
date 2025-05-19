@@ -1,7 +1,17 @@
 import { generateUUIDv4 } from "@/lib/utils";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
-export type MessageContent = string | { size: number|string; url: string, name: string, type: string };
+export type MessageContent =
+  | string
+  | {
+      transferId: string;
+      size: number | string;
+      url?: string;
+      name: string;
+      type: string;
+      status?: "pending" | "completed" | "failed";
+      progress?: number;
+    };
 
 export interface Message {
   id: string;
@@ -36,7 +46,6 @@ const messagesSlice = createSlice({
         }
         state.conversations[key].push(action.payload);
       },
-      // Prepare callback auto-generates id and timestamp
       prepare(payload: Omit<Message, "id" | "timestamp">) {
         return {
           payload: {
@@ -60,6 +69,50 @@ const messagesSlice = createSlice({
     clearAllMessages(state) {
       state.conversations = {};
     },
+    updateMessageByTransferId(
+      state,
+      action: PayloadAction<{
+        sender: string;
+        receiver: string;
+        transferId: string;
+        updatedFields: Partial<Message>;
+      }>
+    ) {
+      const { sender, receiver, transferId, updatedFields } = action.payload;
+      const key = getConversationKey(sender, receiver);
+      const conversation = state.conversations[key];
+
+      if (!conversation) return;
+
+      const messageIndex = conversation.findIndex(
+        (msg) =>
+          msg.type === "file" &&
+          typeof msg.content !== "string" &&
+          msg.content.transferId === transferId
+      );
+
+      if (messageIndex !== -1) {
+        const existingMessage = conversation[messageIndex];
+
+        let updatedContent = existingMessage.content;
+        if (
+          typeof existingMessage.content !== "string" &&
+          updatedFields.content &&
+          typeof updatedFields.content !== "string"
+        ) {
+          updatedContent = {
+            ...existingMessage.content,
+            ...updatedFields.content,
+          };
+        }
+
+        state.conversations[key][messageIndex] = {
+          ...existingMessage,
+          ...updatedFields,
+          content: updatedContent,
+        };
+      }
+    },
   },
 });
 
@@ -70,6 +123,10 @@ export const selectMessages =
     return state.chatbook.conversations[key] || [];
   };
 
-export const { addMessage, clearConversation, clearAllMessages } =
-  messagesSlice.actions;
+export const {
+  addMessage,
+  clearConversation,
+  clearAllMessages,
+  updateMessageByTransferId,
+} = messagesSlice.actions;
 export default messagesSlice.reducer;
