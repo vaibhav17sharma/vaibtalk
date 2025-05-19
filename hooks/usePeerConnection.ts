@@ -75,7 +75,7 @@ export default function usePeerConnection(
         if (conn.peer === uniqueID) return;
         if (data?.type === "file-metadata") {
           const transferId = data.transferId;
-
+          
           dispatch(
             addMessage({
               sender: conn.peer,
@@ -98,6 +98,7 @@ export default function usePeerConnection(
               direction: "incoming",
               fileName: data.fileName,
               fileSize: data.fileSize,
+              mimeType: data.mimeType,
             })
           );
 
