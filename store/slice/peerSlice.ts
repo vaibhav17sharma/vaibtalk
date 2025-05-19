@@ -18,6 +18,7 @@ export interface PeerState {
       status: "pending" | "active" | "completed" | "cancelled";
       fileName?: string;
       fileSize?: number;
+      mimeType?: string;
     }
   >;
 }
@@ -99,6 +100,7 @@ const peerSlice = createSlice({
         direction: "incoming" | "outgoing";
         fileName?: string;
         fileSize?: number;
+        mimeType?: string;
       }>
     ) {
       const { transferId, ...meta } = action.payload;

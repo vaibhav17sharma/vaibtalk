@@ -2,13 +2,28 @@
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
+import { useAppSelector } from "@/hooks/useRedux";
 import { cn, dateFormat } from "@/lib/utils";
-import { Download, FileText, Image } from "lucide-react";
+import peerManager from "@/store/peerManager";
+import { selectContactByUsername } from "@/store/slice/contactSlice";
+import { AvatarImage } from "@radix-ui/react-avatar";
+import { Ban, Download, FileText, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
+import { Progress } from "../ui/progress";
+import ImagePreview from "./ImagePreview";
 
 type Message = {
   id: string;
-  content: string | { size: number|string; url: string, name: string, type: string };
+  content:
+    | string
+    | {
+        size: number | string;
+        url?: string;
+        name: string;
+        type: string;
+        transferId?: string;
+      };
   sender: string;
   timestamp: Date;
   isMe: boolean;
@@ -21,6 +36,24 @@ interface ChatMessageProps {
 
 export default function ChatMessage({ message }: ChatMessageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  const transferId =
+    typeof message.content === "object" && message.content.transferId
+      ? message.content.transferId
+      : undefined;
+
+  const fileTransfer = useAppSelector((state) =>
+    transferId ? state.peer.fileTransfers[transferId] : undefined
+  );
+
+  const username = message.isMe ? peerManager.peer?.id : message.sender;
+
+  
+
+  const contact = useAppSelector((state) =>
+    selectContactByUsername(state, username as string)
+  );
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return bytes + " B";
@@ -28,32 +61,60 @@ export default function ChatMessage({ message }: ChatMessageProps) {
     else return (bytes / 1048576).toFixed(1) + " MB";
   };
 
+  const handleDownload = async () => {
+    if (!transferId) return;
+    setDownloading(true);
+    try {
+      const file = peerManager.finalizeFileTransfer(transferId);
+      if (file) {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file.name;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error("Error downloading file:", error);
+      toast.error("Error downloading file. Please try again later.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const renderFilePreview = () => {
     if (typeof message.content === "string") return null;
 
     const { name, size, type, url } = message.content;
 
-    if (type.startsWith("image/")) {
+
+    if (fileTransfer && fileTransfer.status !== "completed") {
       return (
-        <div className="relative rounded-md overflow-hidden mt-2 group">
-          <img
-            src={url}
-            alt={name}
-            className={cn(
-              "max-w-[240px] max-h-[180px] rounded-md transition-opacity duration-300",
-              isLoaded ? "opacity-100" : "opacity-0"
-            )}
-            onLoad={() => setIsLoaded(true)}
-          />
-          {!isLoaded && (
-            <div className="absolute inset-0 bg-muted/50 animate-pulse flex items-center justify-center">
-              <Image className="w-8 h-8 text-muted-foreground" />
-            </div>
-          )}
-          <div className="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-sm p-2 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity">
-            {name} ({formatFileSize(Number(size))})
+        <div className="flex flex-col items-start gap-2 mt-2">
+          <div className="flex items-center gap-2">
+            <Loader2 className="animate-spin w-5 h-5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">
+              {fileTransfer.status === "pending" && "Waiting..."}
+              {fileTransfer.status === "active" &&
+                `Receiving... (${fileTransfer.progress.toFixed(1)}%)`}
+              {fileTransfer.status === "cancelled" && "Cancelled"}
+            </span>
+          </div>
+          <div className="w-40 h-2 bg-muted/40 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-cyan-500 to-purple-500 transition-all"
+              style={{ width: `${fileTransfer.progress}%` }}
+            />
           </div>
         </div>
+      );
+    }
+
+    if (type.startsWith("image/")) {
+      const file = peerManager.getFile(transferId as string);
+      if (!file) return null;
+      return (
+        <ImagePreview imageName={name} file={file} />
       );
     }
 
@@ -64,11 +125,27 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{name}</p>
-          <p className="text-xs text-muted-foreground">{formatFileSize(Number(size))}</p>
+          <p className="text-xs text-muted-foreground">
+            {formatFileSize(Number(size))}
+          </p>
         </div>
-        <a href={url} download={name} className="text-muted-foreground hover:text-foreground transition-colors">
-          <Download className="w-5 h-5" />
-        </a>
+        {(fileTransfer?.status === "active" ||
+          fileTransfer?.status === "pending") && (
+          <Progress value={fileTransfer?.progress} />
+        )}
+        {fileTransfer?.status === "cancelled" && (
+          <Ban className="w-5 h-5" />
+        )}
+        {(fileTransfer?.status === "completed" || url) && (
+          <button
+            onClick={handleDownload}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            disabled={downloading}
+            title="Download"
+          >
+            <Download className="w-5 h-5" />
+          </button>
+        )}
       </div>
     );
   };
@@ -82,8 +159,12 @@ export default function ChatMessage({ message }: ChatMessageProps) {
     >
       {!message.isMe && (
         <Avatar className="w-8 h-8">
+          <AvatarImage src={contact?.avatar} alt={contact?.name} width={40} />
           <AvatarFallback className="bg-gradient-to-r from-cyan-500 to-purple-500 text-white text-xs">
-            {message.sender.split(" ").map((n) => n[0]).join("")}
+            {message.sender
+              .split(" ")
+              .map((n) => n[0])
+              .join("")}
           </AvatarFallback>
         </Avatar>
       )}

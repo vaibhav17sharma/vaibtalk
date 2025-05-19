@@ -75,6 +75,17 @@ class PeerManager {
     this._fileTransfers.delete(transferId);
     return file;
   }
+  
+  getFile(transferId: string): File | null {
+    const transfer = this._fileTransfers.get(transferId);
+    if (!transfer || !transfer.meta) return null;
+
+    const blob = new Blob(transfer.chunks);
+    return new File([blob], transfer.meta.fileName, {
+      type: transfer.meta.mimeType,
+      lastModified: Date.now()
+    });
+  }
 
   cancelFileTransfer(transferId: string): void {
     const transfer = this._fileTransfers.get(transferId);
