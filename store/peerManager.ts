@@ -69,22 +69,36 @@ class PeerManager {
     const blob = new Blob(transfer.chunks);
     const file = new File([blob], transfer.meta.fileName, {
       type: transfer.meta.mimeType,
-      lastModified: Date.now()
+      lastModified: Date.now(),
     });
 
     this._fileTransfers.delete(transferId);
     return file;
   }
-  
-  getFile(transferId: string): File | null {
+
+  getFile(
+    transferId: string
+  ): File | { name: string; size: number; type?: string } | null {
     const transfer = this._fileTransfers.get(transferId);
+
     if (!transfer || !transfer.meta) return null;
 
-    const blob = new Blob(transfer.chunks);
-    return new File([blob], transfer.meta.fileName, {
-      type: transfer.meta.mimeType,
-      lastModified: Date.now()
-    });
+    if (transfer.direction === "outgoing") {
+      return {
+        name: transfer.meta.fileName,
+        size: transfer.meta.fileSize,
+        type: transfer.meta.mimeType,
+      };
+    }
+
+    if (transfer.chunks.length > 0) {
+      const blob = new Blob(transfer.chunks);
+      return new File([blob], transfer.meta.fileName, {
+        type: transfer.meta.mimeType,
+        lastModified: Date.now(),
+      });
+    }
+    return null;
   }
 
   cancelFileTransfer(transferId: string): void {

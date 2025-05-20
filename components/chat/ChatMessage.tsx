@@ -58,10 +58,26 @@ export default function ChatMessage({ message }: ChatMessageProps) {
 
   useEffect(() => {
     if (
-      !["file", "text"].includes(message.type) &&
+      ["file"].includes(message.type) &&
       waveformRef.current &&
-      typeof message.content === "object"
+      typeof message.content === "object" &&
+      message.content.type.startsWith("audio/")
     ) {
+      const file = peerManager.getFile(transferId as string);
+      let audioURL: string | null = null;
+      if (!file) return;
+      if (file && !(file instanceof File)) {
+        return;
+      }
+      if (file instanceof File) {
+        audioURL = URL.createObjectURL(file);
+      }
+
+      if (!audioURL) {
+        toast.error("Error creating audio preview URL");
+        return;
+      }
+
       wavesurferRef.current = WaveSurfer.create({
         container: waveformRef.current,
         waveColor: "#4f46e5",
@@ -73,7 +89,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         normalize: true,
       });
 
-      wavesurferRef.current.load(message.content.url as string);
+      wavesurferRef.current.load(audioURL as string);
 
       wavesurferRef.current.on("finish", () => {
         setIsPlaying(false);
@@ -84,7 +100,6 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       };
     }
   }, [message]);
-
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return bytes + " B";
@@ -123,8 +138,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
     }
   };
 
-  const renderVoiceNote = () => {
-    const file = peerManager.getFile(transferId as string);
+  const renderVoiceNote = (file: File) => {
     if (!file && typeof message.content === "object" && !message.content.url)
       return null;
 
@@ -175,40 +189,55 @@ export default function ChatMessage({ message }: ChatMessageProps) {
     if (type.startsWith("image/")) {
       const file = peerManager.getFile(transferId as string);
       if (!file) return null;
-      return <ImagePreview imageName={name} file={file} />;
+      if (file && !(file instanceof File)) {
+        return <ImagePreview imageName={name} isImage={false} file={file} />;
+      }
+      if (file instanceof File) {
+        return <ImagePreview imageName={name} isImage={true} file={file} />;
+      }
     }
 
     if (type.startsWith("audio/")) {
-      return renderVoiceNote();
+      const file = peerManager.getFile(transferId as string);
+      if (!file) return null;
+      if (file && !(file instanceof File)) {
+        return;
+      }
+      if (file instanceof File) {
+        return renderVoiceNote(file);
+      }
     }
 
     return (
-      <div className="flex items-center gap-3 mt-2 p-3 bg-muted/30 rounded-md">
-        <div className="bg-muted/50 w-10 h-10 rounded-md flex items-center justify-center">
-          <FileText className="w-5 h-5 text-muted-foreground" />
+      <>
+        <p className="text-sm text-muted-foreground mb-1">Sent a file</p>
+        <div className="flex items-center gap-3 mt-2 p-3 bg-muted/30 rounded-md">
+          <div className="bg-muted/50 w-10 h-10 rounded-md flex items-center justify-center">
+            <FileText className="w-5 h-5 text-muted-foreground" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{name}</p>
+            <p className="text-xs text-muted-foreground">
+              {formatFileSize(Number(size))}
+            </p>
+          </div>
+          {(fileTransfer?.status === "active" ||
+            fileTransfer?.status === "pending") && (
+            <Progress value={fileTransfer?.progress} />
+          )}
+          {fileTransfer?.status === "cancelled" && <Ban className="w-5 h-5" />}
+          {(fileTransfer?.status === "completed" || url) && (
+            <button
+              onClick={handleDownload}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              disabled={downloading}
+              title="Download"
+            >
+              <Download className="w-5 h-5" />
+            </button>
+          )}
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{name}</p>
-          <p className="text-xs text-muted-foreground">
-            {formatFileSize(Number(size))}
-          </p>
-        </div>
-        {(fileTransfer?.status === "active" ||
-          fileTransfer?.status === "pending") && (
-          <Progress value={fileTransfer?.progress} />
-        )}
-        {fileTransfer?.status === "cancelled" && <Ban className="w-5 h-5" />}
-        {(fileTransfer?.status === "completed" || url) && (
-          <button
-            onClick={handleDownload}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-            disabled={downloading}
-            title="Download"
-          >
-            <Download className="w-5 h-5" />
-          </button>
-        )}
-      </div>
+      </>
     );
   };
 
@@ -243,10 +272,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           {message.type === "text" ? (
             <p>{message.content as string}</p>
           ) : (
-            <>
-              <p className="text-sm text-muted-foreground mb-1">Sent a file</p>
-              {renderFilePreview()}
-            </>
+            <>{renderFilePreview()}</>
           )}
         </Card>
         <p className="text-xs text-muted-foreground mt-1 px-1">

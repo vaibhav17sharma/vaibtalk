@@ -2,21 +2,29 @@
 
 import { Button } from "@/components/ui/button";
 import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogTitle,
-    DialogTrigger,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { ImageIcon } from "lucide-react";
+import { FileIcon, ImageIcon } from "lucide-react";
 import Image from "next/image";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
+import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
+
+interface FileLike {
+  name: string;
+  size: number;
+  type?: string;
+}
 
 interface ImagePreviewProps {
-  file: File;
+  file: File | FileLike;
+  isImage: boolean;
   imageName?: string;
 }
 
@@ -26,72 +34,72 @@ const formatFileSize = (bytes: number): string => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-const ImagePreview: React.FC<ImagePreviewProps> = ({ file, imageName }) => {
+const ImagePreview: React.FC<ImagePreviewProps> = ({
+  file,
+  isImage,
+  imageName,
+}) => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [scaledDimensions, setScaledDimensions] = useState<{
     width: number;
     height: number;
-    maxWidth: number;
+    naturalHeight: number;
+    naturalWidth: number;
   }>({
-    width: 240,
-    height: 180,
-    maxWidth: 540,
+    width: 0,
+    height: 0,
+    naturalHeight: 0,
+    naturalWidth: 0,
   });
   const [isLoaded, setIsLoaded] = useState(false);
-  const imageRef = useRef<HTMLImageElement | null>(null);
 
-  const createPreviewUrl = useCallback(() => {
-    if (file) {
+  const isFile = isImage && file instanceof File;
+
+  useEffect(() => {
+    if (isFile) {
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
 
-      return url;
-    }
-    return null;
-  }, [file]);
+      const img = new window.Image();
+      const maxWidth = window.innerWidth > 768 ? 540 : 240;
 
-  useEffect(() => {
-    const url = createPreviewUrl();
-    
-    const img = new window.Image();
-    const maxWidth = window.innerWidth > 768 ? 540 : 240;
-    img.src = url!;
-    
-    img.onload = () => {
-      const { width, height } = img;
+      img.onload = () => {
+        const { width, height, naturalHeight, naturalWidth } = img;
+        const ratio = width > maxWidth ? maxWidth / width : 1;
+        setScaledDimensions({
+          width: width * ratio,
+          height: height * ratio,
+          naturalHeight,
+          naturalWidth,
+        });
+      };
 
-      let scaledWidth = width;
-      let scaledHeight = height;
+      img.src = url;
 
-      if (width > maxWidth) {
-        scaledWidth = maxWidth;
-        scaledHeight = Math.round((height / width) * maxWidth);
-      }
-
-      setScaledDimensions({
-        width: scaledWidth,
-        height: scaledHeight,
-        maxWidth,
-      });
-    };
-
-    return () => {
-       if (url) {
+      return () => {
         URL.revokeObjectURL(url);
-      }
-    };
-  }, [file, createPreviewUrl]);
-
-  const handleDialogClose = () => {
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
+      };
     }
-  };
+  }, [file, isFile]);
 
-  if (!file || !previewUrl) return null;
+  if (!isImage || !isFile) {
+    return (
+      <div className="mt-2 flex items-center gap-3 p-4 border rounded-md bg-muted/20 text-sm">
+        <FileIcon className="w-6 h-6 text-muted-foreground" />
+        <div>
+          <div className="font-medium">{file.name}</div>
+          <div className="text-muted-foreground text-xs">
+            {file.type || "Unknown type"} · {formatFileSize(file.size)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!previewUrl || scaledDimensions.width === 0) return null;
 
   return (
-    <Dialog onOpenChange={handleDialogClose}>
+    <Dialog>
       <DialogTrigger asChild>
         <div className="relative rounded-md overflow-hidden mt-2 group cursor-pointer">
           <Image
@@ -116,21 +124,59 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ file, imageName }) => {
         </div>
       </DialogTrigger>
 
-      <DialogContent className="max-w-[540px] max-h-[95vh] h-auto overflow-auto aspect-[3/4] sm:aspect-[3/4] md:aspect-[3/4] lg:aspect-[3/4]">
-        <DialogTitle>{imageName}</DialogTitle>
-
-        <DialogDescription>
-          Click to download or ignore the image.
+      <DialogContent className="max-w-[90vw] max-h-[85vh] md:max-w-[540px] overflow-auto aspect-[3/4] sm:aspect-[3/4] md:aspect-[3/4] lg:aspect-[3/4] p-4">
+        <DialogTitle>{imageName || file.name}</DialogTitle>
+        <DialogDescription className="mb-2">
+          Pinch to zoom or drag to pan on mobile. Use buttons below for desktop.
         </DialogDescription>
-        <Image
-          src={previewUrl}
-          width={scaledDimensions.maxWidth}
-          height={scaledDimensions.height}
-          alt={file.name}
-          className="w-full h-auto rounded-md object-contain"
-        />
+
+        <TransformWrapper
+          initialScale={1}
+          minScale={0.5}
+          maxScale={4}
+          wheel={{ step: 0.2 }}
+          pinch={{ step: 5 }}
+          doubleClick={{ disabled: true }}
+          panning={{ velocityDisabled: true }}
+        >
+          {({ zoomIn, zoomOut, resetTransform }) => (
+            <>
+              <div className="hidden md:flex flex-wrap gap-2 mb-3 justify-center sm:justify-start">
+                <Button variant="outline" onClick={() => zoomIn()}>
+                  Zoom In
+                </Button>
+                <Button variant="outline" onClick={() => zoomOut()}>
+                  Zoom Out
+                </Button>
+                <Button variant="ghost" onClick={() => resetTransform()}>
+                  Reset
+                </Button>
+              </div>
+
+              <div className="overflow-auto max-h-[70vh] border rounded bg-muted">
+                <TransformComponent
+                  wrapperStyle={{
+                    width: "100%",
+                    height: "100%",
+                    touchAction: "pan-x pan-y",
+                  }}
+                >
+                  <Image
+                    src={previewUrl}
+                    alt={file.name}
+                    width={scaledDimensions.naturalWidth}
+                    height={scaledDimensions.naturalHeight}
+                    draggable={false}
+                    className="w-auto h-auto max-w-full max-h-[70vh] object-contain select-none"
+                  />
+                </TransformComponent>
+              </div>
+            </>
+          )}
+        </TransformWrapper>
+
         <DialogFooter className="mt-4 flex justify-end gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2"> 
             <a href={previewUrl} download={file.name}>
               <Button variant="outline">Download</Button>
             </a>

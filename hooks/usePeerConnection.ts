@@ -75,7 +75,7 @@ export default function usePeerConnection(
         if (conn.peer === uniqueID) return;
         if (data?.type === "file-metadata") {
           const transferId = data.transferId;
-          
+
           dispatch(
             addMessage({
               sender: conn.peer,
@@ -410,6 +410,14 @@ export default function usePeerConnection(
         })
       );
 
+      peerManager.startFileTransfer(transferId, {
+        peerId: toPeerId,
+        direction: "outgoing",
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type,
+      });
+
       try {
         conn.send({
           type: "file-metadata",
@@ -419,12 +427,27 @@ export default function usePeerConnection(
           mimeType: file.type,
         });
 
+        dispatch(
+          addMessage({
+            sender: uniqueID,
+            receiver: toPeerId,
+            content: {
+              transferId,
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              status: "pending",
+            },
+            type: "file",
+          })
+        );
+
         let offset = 0;
         while (offset < file.size) {
           const chunk = file.slice(offset, offset + CHUNK_SIZE);
           const arrayBuffer = await chunk.arrayBuffer();
-          
-          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          await new Promise((resolve) => setTimeout(resolve, 2000));
 
           conn.send({
             type: "file-chunk",
@@ -440,6 +463,23 @@ export default function usePeerConnection(
             updateTransferProgress({
               transferId,
               progress,
+            })
+          );
+          dispatch(
+            updateMessageByTransferId({
+              sender: conn.peer,
+              receiver: uniqueID,
+              transferId: transferId,
+              updatedFields: {
+                content: {
+                  transferId: transferId,
+                  size: file.size,
+                  name: file.name,
+                  type: file.type,
+                  progress,
+                  status: "completed",
+                },
+              },
             })
           );
         }
