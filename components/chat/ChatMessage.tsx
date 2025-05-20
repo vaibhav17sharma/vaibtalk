@@ -7,9 +7,10 @@ import { cn, dateFormat } from "@/lib/utils";
 import peerManager from "@/store/peerManager";
 import { selectContactByUsername } from "@/store/slice/contactSlice";
 import { AvatarImage } from "@radix-ui/react-avatar";
-import { Ban, Download, FileText, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { Ban, Download, FileText, Loader2, Pause, Play } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import WaveSurfer from "wavesurfer.js";
 import { Progress } from "../ui/progress";
 import ImagePreview from "./ImagePreview";
 
@@ -27,7 +28,7 @@ type Message = {
   sender: string;
   timestamp: Date;
   isMe: boolean;
-  type: "text" | "file";
+  type: "text" | "file" | "voice";
 };
 
 interface ChatMessageProps {
@@ -35,8 +36,10 @@ interface ChatMessageProps {
 }
 
 export default function ChatMessage({ message }: ChatMessageProps) {
-  const [isLoaded, setIsLoaded] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const waveformRef = useRef<HTMLDivElement>(null);
+  const wavesurferRef = useRef<WaveSurfer | null>(null);
 
   const transferId =
     typeof message.content === "object" && message.content.transferId
@@ -49,11 +52,39 @@ export default function ChatMessage({ message }: ChatMessageProps) {
 
   const username = message.isMe ? peerManager.peer?.id : message.sender;
 
-  
-
   const contact = useAppSelector((state) =>
     selectContactByUsername(state, username as string)
   );
+
+  useEffect(() => {
+    if (
+      !["file", "text"].includes(message.type) &&
+      waveformRef.current &&
+      typeof message.content === "object"
+    ) {
+      wavesurferRef.current = WaveSurfer.create({
+        container: waveformRef.current,
+        waveColor: "#4f46e5",
+        progressColor: "#818cf8",
+        cursorColor: "#4f46e5",
+        barWidth: 2,
+        barGap: 3,
+        height: 30,
+        normalize: true,
+      });
+
+      wavesurferRef.current.load(message.content.url as string);
+
+      wavesurferRef.current.on("finish", () => {
+        setIsPlaying(false);
+      });
+
+      return () => {
+        wavesurferRef.current?.destroy();
+      };
+    }
+  }, [message]);
+
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return bytes + " B";
@@ -81,12 +112,43 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       setDownloading(false);
     }
   };
+  const togglePlay = () => {
+    if (wavesurferRef.current) {
+      if (isPlaying) {
+        wavesurferRef.current.pause();
+      } else {
+        wavesurferRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const renderVoiceNote = () => {
+    const file = peerManager.getFile(transferId as string);
+    if (!file && typeof message.content === "object" && !message.content.url)
+      return null;
+
+    return (
+      <div className="flex items-center gap-3 mt-2">
+        <button
+          onClick={togglePlay}
+          className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center"
+        >
+          {isPlaying ? (
+            <Pause className="h-4 w-4" />
+          ) : (
+            <Play className="h-4 w-4" />
+          )}
+        </button>
+        <div ref={waveformRef} className="flex-1 min-w-[200px]" />
+      </div>
+    );
+  };
 
   const renderFilePreview = () => {
     if (typeof message.content === "string") return null;
 
     const { name, size, type, url } = message.content;
-
 
     if (fileTransfer && fileTransfer.status !== "completed") {
       return (
@@ -113,9 +175,11 @@ export default function ChatMessage({ message }: ChatMessageProps) {
     if (type.startsWith("image/")) {
       const file = peerManager.getFile(transferId as string);
       if (!file) return null;
-      return (
-        <ImagePreview imageName={name} file={file} />
-      );
+      return <ImagePreview imageName={name} file={file} />;
+    }
+
+    if (type.startsWith("audio/")) {
+      return renderVoiceNote();
     }
 
     return (
@@ -133,9 +197,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           fileTransfer?.status === "pending") && (
           <Progress value={fileTransfer?.progress} />
         )}
-        {fileTransfer?.status === "cancelled" && (
-          <Ban className="w-5 h-5" />
-        )}
+        {fileTransfer?.status === "cancelled" && <Ban className="w-5 h-5" />}
         {(fileTransfer?.status === "completed" || url) && (
           <button
             onClick={handleDownload}
