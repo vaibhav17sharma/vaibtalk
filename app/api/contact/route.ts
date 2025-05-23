@@ -26,14 +26,14 @@ export async function POST(req: Request) {
       where: {
         OR: [
           { email: session.user.email },
-          { id: contactId },
+          { username: contactId },
         ],
       },
-      select: { id: true, email: true },
+      select: { id: true, email: true , username: true },
     });
 
     const currentUser = users.find(u => u.email === session.user.email);
-    const contactUser = users.find(u => u.id === contactId);
+    const contactUser = users.find(u => u.username === contactId);
 
     if (!currentUser || !contactUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -158,7 +158,7 @@ export async function GET() {
 
   try {
     const contacts = await prisma.contact.findMany({
-      where: { userId: session.user.id },
+      where: { userId: session.user.id},
       include: {
         contact: {
           select: {

@@ -134,7 +134,7 @@ export default function ProfilePage() {
             <div className="absolute -bottom-16 left-8">
               <div className="relative group">
                 <Avatar className="w-32 h-32 border-4 border-background">
-                  <AvatarImage src={userProfile.avatar} />
+                  <AvatarImage src={userProfile.avatar} width={40}/>
                   <AvatarFallback className="bg-gradient-to-r from-cyan-500 to-purple-500 text-2xl text-white">
                     {userProfile.name
                       ? userProfile.name
