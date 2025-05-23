@@ -294,7 +294,7 @@ export default function usePeerConnection(
   );
 
   const switchMedia = useCallback(
-    async (targetId: string, mediaType: "video" | "screen") => {
+    async (targetId: string, mediaType: "video" | "screen" | "none") => {
       if (!peerManager.peer || !peerManager.hasConnection(targetId)) {
         console.warn(
           "[usePeerConnection] Cannot switch media, missing peer or connection"
@@ -303,18 +303,22 @@ export default function usePeerConnection(
       }
       peerManager.removeMediaConnection(targetId);
       dispatch(removeMediaConnection(targetId));
-
       try {
-        const stream =
-          mediaType === "video"
-            ? await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: true,
-              })
-            : await navigator.mediaDevices.getDisplayMedia({ video: true });
+        let stream: MediaStream | null = null;
 
-        localMediaStreamRef.current = stream;
-        const call = peerManager.peer.call(targetId, stream);
+        if (mediaType === "video") {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true,
+          });
+        } else if (mediaType === "screen") {
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+          });
+        } else if (mediaType === "none") stream = new MediaStream();
+
+        localMediaStreamRef.current = stream as MediaStream;
+        const call = peerManager.peer.call(targetId, stream as MediaStream);
         peerManager.addMediaConnection(call);
         dispatch(addMediaConnection(targetId));
         dispatch(setActiveMediaType({ peerId: targetId, type: mediaType }));
