@@ -1,170 +1,248 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import Peer from "peerjs";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
-const Room = () => {
-  const { data: session, status } = useSession()
-  const myVideoRef = useRef<HTMLVideoElement>(null);
-  const callingVideoRef = useRef<HTMLVideoElement>(null);
+import ParticipantVideo from "@/components/chat/ParticipantVideo";
+import ParticipantsList from "@/components/chat/ParticipantsList";
+import VideoControls from "@/components/chat/VideoControls";
+import usePeerConnection from "@/hooks/usePeerConnection";
+import { cn } from "@/lib/utils";
 
-  const [peerInstance, setPeerInstance] = useState<Peer | null>(null);
-  const [myUniqueId, setMyUniqueId] = useState<string>("");
-  const [idToCall, setIdToCall] = useState("");
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
+const localPeerId = "kaushikvaibhav";
+const remotePeerId = "dudu";
 
-  const generateUniqueId = () => {
-    const id = Math.random().toString(36).substring(2, 15);
-    return id;
-  }
+export default function VideoPage() {
+  const router = useRouter();
 
-  const handleCall = () => {
-    navigator.mediaDevices
-      .getUserMedia({
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+
+  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
+  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [showParticipants, setShowParticipants] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  const [participants, setParticipants] = useState([
+    {
+      id: localPeerId,
+      name: "Me",
+      video: true,
+      audio: true,
+      isMe: true,
+    },
+    {
+      id: remotePeerId,
+      name: "Peer",
+      video: true,
+      audio: true,
+      isMe: false,
+    },
+  ]);
+
+  const { connect, switchMedia, endMedia, connectionStatus } = usePeerConnection(localPeerId, {
+    onStream: (peerID, stream) => {
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = stream;
+      }
+    },
+    onMediaChange: (peerID, type) => {
+      setIsScreenSharing(type === "screen");
+      if (type === "none" && remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = null;
+      }
+    },
+  });
+
+  useEffect(() => {
+    connect(remotePeerId);
+  }, [connect]);
+
+  const setupCamera = async () => {
+    let stream: MediaStream | null = null;
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
-      })
-      .then((stream) => {
-        const call = peerInstance?.call(idToCall, stream);
-        if (call) {
-          call.on("stream", (userVideoStream) => {
-            if (callingVideoRef.current) {
-              callingVideoRef.current.srcObject = userVideoStream;
-            }
-          });
-        }
       });
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+
+      await switchMedia(remotePeerId, "video");
+    } catch (err) {
+      console.warn("Camera/mic unavailable, proceeding without media.");
+      toast("Media Unavailable", {
+        description: "Joined without camera/microphone.",
+      });
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = new MediaStream(); // empty stream for layout
+      }
+
+      await switchMedia(remotePeerId, "none");
+
+      setParticipants((prev) =>
+        prev.map((p) =>
+          p.id === localPeerId
+            ? { ...p, audio: false, video: false }
+            : p
+        )
+      );
+
+      setIsAudioEnabled(false);
+      setIsVideoEnabled(false);
+    }
   };
 
-  const toggleMute = () => {
-    setIsMuted((prev) => !prev);
-    if (myVideoRef.current?.srcObject instanceof MediaStream) {
-      myVideoRef.current.srcObject
-        .getTracks()
-        .forEach((track) => {
-          if (track.kind === "audio") {
-            track.enabled = !isMuted;
-          }
-        });
-    }
+  const toggleAudio = () => {
+    setIsAudioEnabled((prev) => {
+      const newVal = !prev;
+      const stream = localVideoRef.current?.srcObject as MediaStream;
+      stream?.getAudioTracks().forEach((track) => (track.enabled = newVal));
+      return newVal;
+    });
   };
 
   const toggleVideo = () => {
-    setIsVideoOff((prev) => !prev);
-    if (myVideoRef.current?.srcObject instanceof MediaStream) {
-      myVideoRef.current.srcObject
-        .getTracks()
-        .forEach((track) => {
-          if (track.kind === "video") {
-            track.enabled = !isVideoOff;
-          }
+    setIsVideoEnabled((prev) => {
+      const newVal = !prev;
+      const stream = localVideoRef.current?.srcObject as MediaStream;
+      stream?.getVideoTracks().forEach((track) => (track.enabled = newVal));
+      return newVal;
+    });
+  };
+
+  const toggleScreenShare = async () => {
+    if (!isScreenSharing) {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
         });
+
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
+
+        await switchMedia(remotePeerId, "screen");
+        setIsScreenSharing(true);
+
+        toast("Screen Sharing Started", {
+          description: "You're now sharing your screen",
+        });
+      } catch (err) {
+        console.error("Screen share error:", err);
+        toast.error("Screen Sharing Failed", {
+          description: "Could not share screen",
+        });
+      }
+    } else {
+      await setupCamera();
+      setIsScreenSharing(false);
+      toast("Screen Sharing Stopped");
     }
   };
 
-  useEffect(() => {
-    if (myUniqueId) {
-      let peer: Peer;
-      if (typeof window !== "undefined") {
-        peer = new Peer(myUniqueId, {
-          host: "localhost",
-          port: 9000,
-          path: "/",
-        });
-
-        setPeerInstance(peer);
-
-        navigator.mediaDevices
-          .getUserMedia({
-            video: true,
-            audio: true,
-          })
-          .then((stream) => {
-            if (myVideoRef.current) {
-              myVideoRef.current.srcObject = stream;
-            }
-
-            peer.on("call", (call) => {
-              call.answer(stream);
-              call.on("stream", (userVideoStream) => {
-                if (callingVideoRef.current) {
-                  callingVideoRef.current.srcObject = userVideoStream;
-                }
-              });
-            });
-          });
-      }
-      return () => {
-        if (peer) {
-          peer.destroy();
-        }
-      };
+  const endCall = () => {
+    endMedia(remotePeerId);
+    if (localVideoRef.current?.srcObject) {
+      const stream = localVideoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach((track) => track.stop());
     }
-  }, [myUniqueId]);
+    router.push("/dashboard");
+  };
 
   useEffect(() => {
-    setMyUniqueId(session?.user ? session?.user['uniqueID'] : generateUniqueId());
-  }, [session]);
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  useEffect(() => {
+    setupCamera();
+
+    return () => {
+      endMedia(remotePeerId);
+      if (localVideoRef.current?.srcObject) {
+        const stream = localVideoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
 
   return (
-    <div className="flex flex-col items-center p-8 bg-gray-900 h-screen text-white">
-      {/* Your video container */}
-      <div className="relative w-full max-w-3xl">
-        <div className="absolute top-2 left-2 z-10 p-2 bg-black bg-opacity-50 rounded-md">
-          <p>Your ID: {myUniqueId}</p>
-        </div>
-        <video
-          className="w-full h-96 rounded-lg object-cover"
-          playsInline
-          ref={myVideoRef}
-          autoPlay
-        />
-        {/* Mute and Video Off/On buttons */}
-        <div className="absolute top-2 right-2 z-20 flex space-x-4">
-          <button
-            onClick={toggleMute}
-            className="bg-black bg-opacity-50 hover:bg-opacity-80 text-white px-4 py-2 rounded-lg"
-          >
-            {isMuted ? "Unmute" : "Mute"}
-          </button>
-          <button
-            onClick={toggleVideo}
-            className="bg-black bg-opacity-50 hover:bg-opacity-80 text-white px-4 py-2 rounded-lg"
-          >
-            {isVideoOff ? "Start Video" : "Stop Video"}
-          </button>
-        </div>
+    <div className="flex h-screen pt-16 bg-black relative overflow-hidden">
+      {/* Background effects */}
+      <div className="absolute inset-0 z-0">
+        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-purple-900/20 to-cyan-900/20 opacity-50" />
+        <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full filter blur-[120px]" />
+        <div className="absolute bottom-1/3 left-1/4 w-96 h-96 bg-cyan-500/20 rounded-full filter blur-[120px]" />
       </div>
 
-      {/* Input and Call Button */}
-      <div className="flex flex-col items-center mt-8 space-y-4">
-        <input
-          className="p-2 w-72 rounded-lg text-black text-center"
-          placeholder="Enter ID to Call"
-          value={idToCall}
-          onChange={(e) => setIdToCall(e.target.value)}
+      {/* Main content */}
+      <div className="relative z-10 flex flex-col w-full">
+        <div className="flex-1 p-4">
+          <div
+            className={cn(
+              "grid gap-4 h-full",
+              isMobile
+                ? "grid-cols-1"
+                : participants.length === 1
+                ? "grid-cols-1"
+                : participants.length === 2
+                ? "grid-cols-1 md:grid-cols-2"
+                : participants.length <= 4
+                ? "grid-cols-1 md:grid-cols-2"
+                : "grid-cols-1 md:grid-cols-3"
+            )}
+          >
+            {participants.map((participant) => (
+              <ParticipantVideo
+                key={participant.id}
+                participant={participant}
+                isLarge={participants.length <= 1}
+                isScreenSharing={participant.isMe && isScreenSharing}
+                videoRef={
+                  participant.isMe
+                    ? localVideoRef
+                    : participant.id === remotePeerId
+                    ? remoteVideoRef
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Controls */}
+        <VideoControls
+          isAudioEnabled={isAudioEnabled}
+          isVideoEnabled={isVideoEnabled}
+          isScreenSharing={isScreenSharing}
+          isMobile={isMobile}
+          onSwitchCamera={setupCamera}
+          toggleAudio={toggleAudio}
+          toggleVideo={toggleVideo}
+          toggleScreenShare={toggleScreenShare}
+          endCall={endCall}
+          toggleParticipants={() => setShowParticipants(!showParticipants)}
         />
-        <button
-          onClick={handleCall}
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg"
-        >
-          Call
-        </button>
       </div>
 
-      {/* Second person's video (bottom) */}
-      <div className="relative mt-8 w-full max-w-3xl">
-        <video
-          className="w-full h-96 rounded-lg object-cover"
-          playsInline
-          ref={callingVideoRef}
-          autoPlay
-        />
-      </div>
+      {/* Participants Sidebar */}
+      <ParticipantsList
+        isOpen={showParticipants}
+        onClose={() => setShowParticipants(false)}
+        participants={participants}
+      />
     </div>
   );
-};
-
-export default Room;
+}
