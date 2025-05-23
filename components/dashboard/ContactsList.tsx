@@ -68,7 +68,7 @@ export default function ContactsList({ contacts }: ContactsListProps) {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <Avatar>
-                  <AvatarImage src={`${contact.avatar as string}`} width={20} />
+                  <AvatarImage src={`${contact.avatar as string}`} width={40} />
                   <AvatarFallback className="bg-gradient-to-r from-cyan-500 to-purple-500 text-white">
                     {contact.contactName
                       .split(" ")
