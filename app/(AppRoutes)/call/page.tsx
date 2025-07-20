@@ -183,9 +183,10 @@ export default function VideoPage() {
       {/* Background effects */}
       <div className="absolute inset-0 z-0">
         <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-purple-900/20 to-cyan-900/20 opacity-50" />
-        <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full filter blur-[120px]" />
-        <div className="absolute bottom-1/3 left-1/4 w-96 h-96 bg-cyan-500/20 rounded-full filter blur-[120px]" />
+        <div className="absolute top-1/3 right-1/4 w-60 h-60 sm:w-72 sm:h-72 md:w-96 md:h-96 bg-purple-500/20 rounded-full filter blur-[80px] sm:blur-[100px] md:blur-[120px]" />
+        <div className="absolute bottom-1/3 left-1/4 w-60 h-60 sm:w-72 sm:h-72 md:w-96 md:h-96 bg-cyan-500/20 rounded-full filter blur-[80px] sm:blur-[100px] md:blur-[120px]" />
       </div>
+
 
       {/* Main content */}
       <div className="relative z-10 flex flex-col w-full">
@@ -196,12 +197,12 @@ export default function VideoPage() {
               isMobile
                 ? "grid-cols-1"
                 : participants.length === 1
-                ? "grid-cols-1"
-                : participants.length === 2
-                ? "grid-cols-1 md:grid-cols-2"
-                : participants.length <= 4
-                ? "grid-cols-1 md:grid-cols-2"
-                : "grid-cols-1 md:grid-cols-3"
+                  ? "grid-cols-1"
+                  : participants.length === 2
+                    ? "grid-cols-1 md:grid-cols-2"
+                    : participants.length <= 4
+                      ? "grid-cols-1 md:grid-cols-2"
+                      : "grid-cols-1 md:grid-cols-3"
             )}
           >
             {participants.map((participant) => (
@@ -214,8 +215,8 @@ export default function VideoPage() {
                   participant.isMe
                     ? localVideoRef
                     : participant.id === remotePeerId
-                    ? remoteVideoRef
-                    : undefined
+                      ? remoteVideoRef
+                      : undefined
                 }
               />
             ))}

@@ -3,12 +3,12 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
-    Form,
-    FormControl,
-    FormDescription,
-    FormField,
-    FormItem,
-    FormLabel,
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -79,10 +79,10 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen pt-16 bg-black/90">
       {/* Background effects */}
-      <div className="absolute inset-0 z-0">
-        <div className="absolute top-1/3 right-1/4 w-64 h-64 bg-purple-500/20 rounded-full filter blur-[80px]"></div>
-        <div className="absolute bottom-1/3 left-1/4 w-80 h-80 bg-cyan-500/20 rounded-full filter blur-[80px]"></div>
-      </div>
+<div className="absolute inset-0 z-0">
+  <div className="absolute top-1/3 right-1/4 w-40 h-40 sm:w-52 sm:h-52 md:w-64 md:h-64 bg-purple-500/20 rounded-full filter blur-[60px] sm:blur-[80px]"></div>
+  <div className="absolute bottom-1/4 left-1/4 w-52 h-52 sm:w-64 sm:h-64 md:w-80 md:h-80 bg-cyan-500/20 rounded-full filter blur-[60px] sm:blur-[80px]"></div>
+</div>
 
       <div className="container mx-auto px-4 py-8 relative z-10">
         <Card className="max-w-4xl mx-auto bg-background/50 backdrop-blur-sm border-purple-500/20">

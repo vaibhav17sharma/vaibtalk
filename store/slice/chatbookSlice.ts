@@ -1,17 +1,18 @@
 import { generateUUIDv4 } from "@/lib/utils";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { createSelector } from 'reselect';
 
 export type MessageContent =
   | string
   | {
-      transferId: string;
-      size: number | string;
-      url?: string;
-      name: string;
-      type: string;
-      status?: "pending" | "completed" | "failed";
-      progress?: number;
-    };
+    transferId: string;
+    size: number | string;
+    url?: string;
+    name: string;
+    type: string;
+    status?: "pending" | "completed" | "failed";
+    progress?: number;
+  };
 
 export interface Message {
   id: string;
@@ -41,10 +42,8 @@ const messagesSlice = createSlice({
       reducer(state, action: PayloadAction<Message>) {
         const { sender, receiver } = action.payload;
         const key = getConversationKey(sender, receiver);
-        if (!state.conversations[key]) {
-          state.conversations[key] = [];
-        }
-        state.conversations[key].push(action.payload);
+        const existing = state.conversations[key] || [];
+        state.conversations[key] = [...existing, action.payload];
       },
       prepare(payload: Omit<Message, "id" | "timestamp">) {
         return {
@@ -116,12 +115,15 @@ const messagesSlice = createSlice({
   },
 });
 
-export const selectMessages =
-  (currentUser: string, activePeer: string) =>
-  (state: { chatbook: MessagesState }) => {
-    const key = getConversationKey(currentUser, activePeer);
-    return state.chatbook.conversations[key] || [];
-  };
+export const makeSelectMessages = (currentUser: string, activePeer: string) =>
+  createSelector(
+    (state: { chatbook: MessagesState }) => state.chatbook.conversations,
+    (conversations: any): Message[] => {
+      const key = getConversationKey(currentUser, activePeer);
+      return conversations[key] || [];
+    }
+  );
+
 
 export const {
   addMessage,

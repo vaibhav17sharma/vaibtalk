@@ -17,14 +17,14 @@ import ImagePreview from "./ImagePreview";
 type Message = {
   id: string;
   content:
-    | string
-    | {
-        size: number | string;
-        url?: string;
-        name: string;
-        type: string;
-        transferId?: string;
-      };
+  | string
+  | {
+    size: number | string;
+    url?: string;
+    name: string;
+    type: string;
+    transferId?: string;
+  };
   sender: string;
   timestamp: Date;
   isMe: boolean;
@@ -223,8 +223,8 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           </div>
           {(fileTransfer?.status === "active" ||
             fileTransfer?.status === "pending") && (
-            <Progress value={fileTransfer?.progress} />
-          )}
+              <Progress value={fileTransfer?.progress} />
+            )}
           {fileTransfer?.status === "cancelled" && <Ban className="w-5 h-5" />}
           {(fileTransfer?.status === "completed" || url) && (
             <button
@@ -260,25 +260,28 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         </Avatar>
       )}
 
-      <div>
+      <div className="flex flex-col items-start space-y-1">
         <Card
           className={cn(
-            "p-3 shadow-sm",
+            "relative py-2 px-3 shadow-sm max-w-xs",
             message.isMe
-              ? "bg-gradient-to-r from-purple-500/10 to-cyan-500/10 border-purple-500/20"
-              : "bg-muted/20 border-border"
+              ? "self-end bg-gradient-to-r from-purple-500/10 to-cyan-500/10 border-purple-500/20"
+              : "self-start bg-muted/20 border-border"
           )}
         >
           {message.type === "text" ? (
-            <p>{message.content as string}</p>
+            <p className="text-sm min-w-10 pb-2">{message.content as string}</p>
           ) : (
             <>{renderFilePreview()}</>
           )}
+
+          {/* WhatsApp-style timestamp */}
+          <span className="absolute bottom-1 right-2 text-[10px] text-muted-foreground">
+            {dateFormat(message.timestamp, "h:mm a")}
+          </span>
         </Card>
-        <p className="text-xs text-muted-foreground mt-1 px-1">
-          {dateFormat(message.timestamp, "h:mm a")}
-        </p>
       </div>
+
     </div>
   );
 }

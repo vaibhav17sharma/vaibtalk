@@ -84,7 +84,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
 
   if (!isImage || !isFile) {
     return (
-      <div className="mt-2 flex items-center gap-3 p-4 border rounded-md bg-muted/20 text-sm">
+      <div className="flex items-center gap-3 py-2 px-3 border rounded-md bg-muted/20 text-sm">
         <FileIcon className="w-6 h-6 text-muted-foreground" />
         <div>
           <div className="font-medium">{file.name}</div>
@@ -101,7 +101,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <div className="relative rounded-md overflow-hidden mt-2 group cursor-pointer">
+        <div className="relative rounded-md overflow-hidden mt-2 pb-3 group cursor-pointer">
           <Image
             src={previewUrl}
             alt={file.name}
@@ -124,7 +124,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
         </div>
       </DialogTrigger>
 
-      <DialogContent className="max-w-[90vw] max-h-[85vh] md:max-w-[540px] overflow-auto aspect-[3/4] sm:aspect-[3/4] md:aspect-[3/4] lg:aspect-[3/4] p-4">
+      <DialogContent className="max-w-[90vw] max-h-[90vh] md:max-w-[540px] overflow-auto aspect-[3/4] sm:aspect-[3/4] md:aspect-[3/4] lg:aspect-[3/4] p-4">
         <DialogTitle>{imageName || file.name}</DialogTitle>
         <DialogDescription className="mb-2">
           Pinch to zoom or drag to pan on mobile. Use buttons below for desktop.

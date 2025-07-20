@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MessageSquare, MoreVertical, Phone, UserMinus } from "lucide-react";
+import { MessageSquare, MoreVertical, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 
 interface Contact {
@@ -107,18 +107,14 @@ export default function ContactsList({ contacts }: ContactsListProps) {
 
             <div className="flex items-center gap-1">
               <Button
+                onClick={() => {
+                  window.location.href = `/chat?contact=${contact.username}`;
+                }}
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 rounded-full"
               >
                 <MessageSquare className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-full"
-              >
-                <Phone className="h-4 w-4" />
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -1,6 +1,7 @@
 "use client";
 import { cn } from "@/lib/utils";
-import { Menu, MessageSquare, Video, X } from "lucide-react";
+import { Contact, LogOutIcon, Menu, MessageSquare, Settings2, UserIcon, X } from "lucide-react";
+import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "../ui/button";
@@ -44,16 +45,16 @@ export const Appbar = () => {
               Home
             </Link>
             <Link
+              href="/contacts"
+              className="text-foreground/70 hover:text-foreground transition-colors flex items-center gap-1"
+            >
+              <Contact className="w-4 h-4" /> Contacts
+            </Link>
+            <Link
               href="/chat"
               className="text-foreground/70 hover:text-foreground transition-colors flex items-center gap-1"
             >
               <MessageSquare className="w-4 h-4" /> Chat
-            </Link>
-            <Link
-              href="/call"
-              className="text-foreground/70 hover:text-foreground transition-colors flex items-center gap-1"
-            >
-              <Video className="w-4 h-4" /> Video
             </Link>
           </nav>
 
@@ -79,11 +80,11 @@ export const Appbar = () => {
           <div className="md:hidden bg-background/95 backdrop-blur-lg border-b border-border">
             <div className="container mx-auto py-4 px-4 flex flex-col gap-4">
               <Link
-                href="/"
+                href="/dashboard"
                 className="py-2 text-foreground/70 hover:text-foreground transition-colors"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                Home
+                Dashboard
               </Link>
               <Link
                 href="/chat"
@@ -93,12 +94,36 @@ export const Appbar = () => {
                 <MessageSquare className="w-4 h-4" /> Chat
               </Link>
               <Link
-                href="/call"
+                href="/contacts"
                 className="py-2 text-foreground/70 hover:text-foreground transition-colors flex items-center gap-2"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                <Video className="w-4 h-4" /> Video
+                <Contact className="w-4 h-4" /> Contacts
               </Link>
+              <Link
+                href="/profile"
+                className="py-2 text-foreground/70 hover:text-foreground transition-colors flex items-center gap-2"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                <UserIcon className="w-4 h-4" /> Profile
+              </Link>
+              <Link
+                href="/settings"
+                className="py-2 text-foreground/70 hover:text-foreground transition-colors flex items-center gap-2"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                <Settings2 className="w-4 h-4" /> Settings
+              </Link>
+              <Button
+                variant="ghost"
+                className="py-2 text-foreground/70 hover:text-foreground transition-colors flex items-center gap-2"
+                onClick={() => {
+                  signOut();
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <LogOutIcon className="w-4 h-4" /> Logout
+              </Button>
               <Link href="/chat" onClick={() => setIsMobileMenuOpen(false)}>
                 <Button className="w-full bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 mt-2">
                   Start Talking

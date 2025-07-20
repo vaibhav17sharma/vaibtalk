@@ -69,8 +69,7 @@ export default function usePeerConnection(
       conn.on("data", async (data: any) => {
         console.log(
           "[usePeerConnection] Received data from",
-          conn.peer,
-          data?.type
+          conn.peer,          
         );
         if (conn.peer === uniqueID) return;
         if (data?.type === "file-metadata") {
@@ -185,7 +184,7 @@ export default function usePeerConnection(
         uniqueID
       );
       const peer = new Peer(uniqueID, {
-        host: "192.168.31.111",
+        host: "192.168.31.14",
         port: 9000,
         path: "/peer-server/vaibtalk",
         secure: false,
@@ -450,9 +449,6 @@ export default function usePeerConnection(
         while (offset < file.size) {
           const chunk = file.slice(offset, offset + CHUNK_SIZE);
           const arrayBuffer = await chunk.arrayBuffer();
-
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-
           conn.send({
             type: "file-chunk",
             transferId,
