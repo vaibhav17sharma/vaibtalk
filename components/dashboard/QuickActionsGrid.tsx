@@ -24,7 +24,7 @@ export default function QuickActionsGrid({ actions }: QuickActionsGridProps) {
               <div className={`p-3 rounded-xl bg-gradient-to-br ${action.color} bg-opacity-10 group-hover:scale-110 transition-transform`}>
                 {action.icon}
               </div>
-              <h3 className="font-medium">{action.title}</h3>
+              {/* <h3 className="font-medium">{action.title}</h3> */}
             </div>
           </Card>
         </Link>

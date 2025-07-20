@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { MessageSquare, MoreVertical, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -78,12 +79,14 @@ export default function ContactsList({ contacts }: ContactsListProps) {
                       .toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                {/* <span
+                <span
                   className={cn(
                     "absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-background",
-                    contact.status === "online" ? "bg-green-500" : "bg-gray-500"
+                    contact.status === "online" 
+                      ? "bg-gradient-to-r from-green-400 to-green-500 animate-pulse" 
+                      : "bg-gray-500"
                   )}
-                ></span> */}
+                ></span>
               </div>
 
               <div>
@@ -95,13 +98,15 @@ export default function ContactsList({ contacts }: ContactsListProps) {
                     </span>
                   )}
                 </p>
-                {/* <p className="text-xs text-muted-foreground">
-                  {contact.status === "online"
-                    ? "Online"
-                    : contact.lastSeen
-                    ? `Last seen ${dateFormat(contact.lastSeen, "h:mm a")}`
-                    : "Offline"}
-                </p> */}
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <span className={cn(
+                    "inline-block w-2 h-2 rounded-full",
+                    contact.status === "online" 
+                      ? "bg-green-500 animate-pulse" 
+                      : "bg-gray-500"
+                  )}></span>
+                  {contact.status === "online" ? "Online" : "Offline"}
+                </p>
               </div>
             </div>
 

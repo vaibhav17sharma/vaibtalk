@@ -64,6 +64,7 @@ export const flattenContacts = (contacts: any[]) => {
     username: c.contact?.username,
     avatar: c.contact?.avatar,
     name: c.contact?.name,
+    online: c.contact?.online
   }));
 };
 

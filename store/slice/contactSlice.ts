@@ -11,7 +11,7 @@ export interface Contact {
   username: string;
   avatar?: string;
   name: string;
-  online?: boolean;
+  online: boolean;
 }
 
 interface ContactState {

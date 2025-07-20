@@ -157,7 +157,7 @@ export async function GET() {
   }
 
   try {
-    const contacts = await prisma.contact.findMany({
+    let contacts = await prisma.contact.findMany({
       where: { userId: session.user.id},
       include: {
         contact: {
@@ -169,7 +169,11 @@ export async function GET() {
         },
       },
     });
-    return NextResponse.json({ contacts });
+    let response = {
+      ...contacts,
+      online: false
+    }
+    return NextResponse.json({ response });
   } catch (error: any) {
     console.error("Error fetching contacts:", error);
     return NextResponse.json(

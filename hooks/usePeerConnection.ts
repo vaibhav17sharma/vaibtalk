@@ -184,7 +184,7 @@ export default function usePeerConnection(
         uniqueID
       );
       const peer = new Peer(uniqueID, {
-        host: "192.168.31.14",
+        host: "192.168.31.12",
         port: 9000,
         path: "/peer-server/vaibtalk",
         secure: false,
