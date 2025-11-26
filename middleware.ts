@@ -9,8 +9,8 @@ export async function middleware(request: NextRequest) {
   const isProfileComplete = token?.profileCompleted;
   const { pathname } = request.nextUrl;
 
-  const isAuthRoute = pathname.startsWith("/api/auth") || pathname === "/signin" || pathname === "/signup";
-  const isPublicRoute = pathname === "/" || pathname === "/signin" || pathname === "/signup" || pathname.startsWith("/invite/");
+  const isAuthRoute = pathname.startsWith("/api/auth") || pathname === "/signin" || pathname === "/signup" || pathname === "/auth/signup";
+  const isPublicRoute = pathname === "/" || pathname === "/signin" || pathname === "/signup" || pathname === "/auth/signup" || pathname.startsWith("/invite/");
   
   // Public API routes that don't require authentication
   const publicApiRoutes = [

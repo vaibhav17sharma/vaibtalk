@@ -1,20 +1,26 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAppSelector } from "@/hooks/useRedux";
 import { useSessionWithRedux } from "@/hooks/useSessionWithRedux";
+import { RootState } from "@/store/store";
 import { signIn, signOut } from "next-auth/react";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 
 export default function UserAction() {
   const { session } = useSessionWithRedux();
+  const userProfile = useAppSelector(
+    (state: RootState) => state.userProfile.userProfile
+  );
+
   return (
     <>
       {session?.user ? (
@@ -25,7 +31,7 @@ export default function UserAction() {
                 <AvatarImage
                   width={40}
                   height={40}
-                  src={`${session.user.image}`}
+                  src={userProfile?.avatar || session.user.image || undefined}
                   alt={session.user.name}
                   referrerPolicy={"no-referrer"}
                 />

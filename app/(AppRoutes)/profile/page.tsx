@@ -1,7 +1,7 @@
 "use client";
 
 import Loading from "@/app/loading";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarUpload } from "@/components/profile/AvatarUpload";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -26,7 +26,7 @@ import { setUserProfile } from "@/store/slice/userProfileSlice";
 import { RootState } from "@/store/store";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
-import { AtSign, Calendar, Camera, Edit3, Mail, Save, UserPlus } from "lucide-react";
+import { AtSign, Calendar, Edit3, Mail, Save, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -157,24 +157,11 @@ export default function ProfilePage() {
           {/* Profile Header */}
           <div className="relative h-32 bg-gradient-to-r from-cyan-500/20 to-purple-500/20 rounded-t-lg">
             <div className="absolute -bottom-16 left-8">
-              <div className="relative group">
-                <Avatar className="w-32 h-32 border-4 border-background">
-                  <AvatarImage src={userProfile.avatar} width={40}/>
-                  <AvatarFallback className="bg-gradient-to-r from-cyan-500 to-purple-500 text-2xl text-white">
-                    {userProfile.name
-                      ? userProfile.name
-                          .split(" ")
-                          .map((n: any) => n[0])
-                          .join("")
-                      : ""}
-                  </AvatarFallback>
-                </Avatar>
-                {isEditing && (
-                  <button className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Camera className="w-6 h-6" />
-                  </button>
-                )}
-              </div>
+              <AvatarUpload
+                currentAvatar={userProfile.avatar}
+                userName={userProfile.name || "User"}
+                isEditing={isEditing}
+              />
             </div>
             {!isEditing && (
               <Button

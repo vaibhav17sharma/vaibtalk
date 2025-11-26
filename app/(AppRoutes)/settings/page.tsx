@@ -1,5 +1,6 @@
 "use client";
 
+import { UpdatePassword } from "@/components/settings/UpdatePassword";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -14,7 +15,9 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { zodResolver } from "@hookform/resolvers/zod";
+import axios from "axios";
 import { Bell, Radio, Shield } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
@@ -64,10 +67,25 @@ const defaultValues: Partial<SettingsFormValues> = {
 };
 
 export default function SettingsPage() {
+  const [hasPassword, setHasPassword] = useState(false);
+  
   const form = useForm<SettingsFormValues>({
     resolver: zodResolver(settingsFormSchema),
     defaultValues,
   });
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const res = await axios.get("/api/profile");
+        const user = res.data.user;
+        setHasPassword(!!user.password);
+      } catch (error) {
+        console.error("Failed to fetch user data:", error);
+      }
+    };
+    fetchUserData();
+  }, []);
 
   function onSubmit(data: SettingsFormValues) {
     toast("Settings updated", {
@@ -107,6 +125,12 @@ export default function SettingsPage() {
                       className="flex items-center gap-2"
                     >
                       <Shield className="w-4 h-4" /> Privacy
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="security"
+                      className="flex items-center gap-2"
+                    >
+                      <Shield className="w-4 h-4" /> Security
                     </TabsTrigger>
                     <TabsTrigger
                       value="webrtc"
@@ -248,6 +272,10 @@ export default function SettingsPage() {
                         )}
                       />
                     </div>
+                  </TabsContent>
+
+                  <TabsContent value="security" className="space-y-6">
+                    <UpdatePassword hasPassword={hasPassword} />
                   </TabsContent>
 
                   <TabsContent value="webrtc" className="space-y-6">

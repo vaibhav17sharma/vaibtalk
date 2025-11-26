@@ -54,6 +54,9 @@ importers:
       axios:
         specifier: ^1.9.0
         version: 1.9.0
+      bcryptjs:
+        specifier: ^3.0.3
+        version: 3.0.3
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.1
@@ -102,6 +105,9 @@ importers:
       reselect:
         specifier: ^5.1.1
         version: 5.1.1
+      sharp:
+        specifier: ^0.34.5
+        version: 0.34.5
       sonner:
         specifier: ^1.5.0
         version: 1.7.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -1443,6 +1449,10 @@ packages:
 
   baseline-browser-mapping@2.8.31:
     resolution: {integrity: sha512-a28v2eWrrRWPpJSzxc+mKwm0ZtVx/G8SepdQZDArnXYU/XS+IF6mp8aB/4E+hH1tyGCoDo3KlUCdlSxGDsRkAw==}
+    hasBin: true
+
+  bcryptjs@3.0.3:
+    resolution: {integrity: sha512-GlF5wPWnSa/X5LKM1o0wz0suXIINz1iHRLvTS+sLyi7XPbe5ycmYI3DlZqVGZZtDgl4DmasFg7gOB3JYbphV5g==}
     hasBin: true
 
   binary-extensions@2.3.0:
@@ -3360,8 +3370,7 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@img/colour@1.0.0':
-    optional: true
+  '@img/colour@1.0.0': {}
 
   '@img/sharp-darwin-arm64@0.34.5':
     optionalDependencies:
@@ -4276,6 +4285,8 @@ snapshots:
 
   baseline-browser-mapping@2.8.31: {}
 
+  bcryptjs@3.0.3: {}
+
   binary-extensions@2.3.0: {}
 
   brace-expansion@1.1.12:
@@ -4437,8 +4448,7 @@ snapshots:
 
   delayed-stream@1.0.0: {}
 
-  detect-libc@2.1.2:
-    optional: true
+  detect-libc@2.1.2: {}
 
   detect-node-es@1.1.0: {}
 
@@ -5811,7 +5821,6 @@ snapshots:
       '@img/sharp-win32-arm64': 0.34.5
       '@img/sharp-win32-ia32': 0.34.5
       '@img/sharp-win32-x64': 0.34.5
-    optional: true
 
   shebang-command@2.0.0:
     dependencies:

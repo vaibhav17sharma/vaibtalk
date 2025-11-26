@@ -59,6 +59,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./prisma:/app/prisma
+      - ./public/uploads:/app/public/uploads
     command: >
       sh -c "
         npx prisma@6.7.0 migrate deploy &&

@@ -1,7 +1,9 @@
 import { PrismaClient } from "@/lib/generated/prisma";
+import bcrypt from "bcryptjs";
 import { Account, NextAuthOptions, Profile, Session, User } from "next-auth";
 import { AdapterUser } from "next-auth/adapters";
 import { JWT } from "next-auth/jwt";
+import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 
 const prisma = new PrismaClient();
@@ -26,6 +28,37 @@ export const authOptions: NextAuthOptions = {
         },
       },
     }),
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "text" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error("Invalid credentials");
+        }
+
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email },
+        });
+
+        if (!user || !user.password) {
+          throw new Error("Invalid credentials");
+        }
+
+        const isCorrectPassword = await bcrypt.compare(
+          credentials.password,
+          user.password
+        );
+
+        if (!isCorrectPassword) {
+          throw new Error("Invalid credentials");
+        }
+
+        return user;
+      },
+    }),
   ],
   session: {
     strategy: "jwt",
@@ -34,6 +67,7 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
     async signIn({
+      user,
       account,
       profile,
     }: {
@@ -83,6 +117,24 @@ export const authOptions: NextAuthOptions = {
             },
           });
 
+          return true;
+        }
+      }
+
+      if (account?.provider === "credentials") {
+        if (user) {
+          await prisma.userSession.upsert({
+            where: { userId: user.id },
+            update: {
+              isOnline: true,
+              lastSeen: new Date(),
+              updatedAt: new Date(),
+            },
+            create: {
+              userId: user.id,
+              isOnline: true,
+            },
+          });
           return true;
         }
       }
