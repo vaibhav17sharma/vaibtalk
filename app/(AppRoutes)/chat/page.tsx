@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { makeSelectMessages } from "@/store/slice/chatbookSlice";
 import EmojiPicker from "emoji-picker-react";
 import {
+  AlertTriangle,
   ArrowLeft,
   Camera,
   FileText,
@@ -22,6 +23,7 @@ import {
   Send,
   Smile,
   User,
+  UserPlus,
   Video as VideoIcon
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -51,6 +53,7 @@ export default function ChatPage() {
   const [activePeer, setActivePeer] = useState<any>(null);
   const currentUser = session?.user.uniqueID as string;
   let activePeerId = activePeer?.username as string;
+  const [isInContacts, setIsInContacts] = useState(true);
 
   useEffect(() => {
     const contactId = searchParams.get("contact");
@@ -62,8 +65,16 @@ export default function ChatPage() {
           online: peer.online,
         });
         activePeerId = peer.username as string;
+        setIsInContacts(true);
       } else {
-        toast.error("Contact not found");
+        // Handle unknown contact - create a temporary peer object
+        setActivePeer({
+          username: contactId,
+          name: contactId,
+          online: false,
+        });
+        activePeerId = contactId;
+        setIsInContacts(false);
       }
     } else {
       router.push("/contacts");
@@ -159,7 +170,7 @@ export default function ChatPage() {
   };
 
   const handleSendMessage = () => {
-    if (!messageInput.trim() || !activePeer) return;
+    if (!messageInput.trim() || !activePeer || !isInContacts) return;
     sendPeerMessage(messageInput, activePeer.username);
     setMessageInput("");
   };
@@ -244,6 +255,38 @@ export default function ChatPage() {
   const changeChatMessage = (peer: any) => {
     setActivePeer(peer);
   };
+  
+  const handleAddToContacts = async () => {
+    if (!activePeer) return;
+    
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contactId: activePeer.username,
+          contactName: activePeer.name || activePeer.username,
+          action: "ADD_CONTACT",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to add contact.");
+      }
+
+      toast.success("Contact added", {
+        description: `You added ${activePeer.name || activePeer.username} to your contacts.`,
+      });
+      
+      setIsInContacts(true);
+    } catch (err: any) {
+      toast.error(err.message || "Something went wrong while adding contact.");
+    }
+  };
 
   return (
     <div
@@ -294,11 +337,31 @@ export default function ChatPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {!isInContacts && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleAddToContacts}
+                className="mr-2 text-xs flex items-center gap-1"
+              >
+                <UserPlus className="w-3 h-3" /> Add Contact
+              </Button>
+            )}
             <Button variant="ghost" size="icon" onClick={handleConnect}>
               <VideoIcon className="w-5 h-5" />
             </Button>
           </div>
         </div>
+        
+        {!isInContacts && (
+          <div className="bg-amber-500/10 border-l-4 border-amber-500 p-3 flex items-center gap-2">
+            <AlertTriangle className="text-amber-500 w-5 h-5" />
+            <div>
+              <p className="text-sm font-medium">This person is not in your contacts</p>
+              <p className="text-xs text-muted-foreground">Add them to your contacts to send messages</p>
+            </div>
+          </div>
+        )}
 
         {/* Messages container */}
         <div className="flex-1 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] p-4 space-y-4 relative z-10">
@@ -423,7 +486,14 @@ export default function ChatPage() {
               variant="default"
               size="icon"
               onClick={handleSendMessage}
-              className="rounded-full bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600"
+              disabled={!isInContacts}
+              className={cn(
+                "rounded-full",
+                isInContacts 
+                  ? "bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600" 
+                  : "bg-gray-500 opacity-50 cursor-not-allowed"
+              )}
+              title={!isInContacts ? "Add to contacts first" : "Send message"}
             >
               <Send className="w-4 h-4" />
             </Button>

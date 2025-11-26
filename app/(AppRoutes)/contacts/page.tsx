@@ -1,21 +1,22 @@
 "use client";
 
-import AddContactDialog from "@/components/dashboard/AddContactDialog";
+import EnhancedAddContactDialog from "@/components/dashboard/EnhancedAddContactDialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAppSelector } from "@/hooks/useRedux";
+import { useAppDispatch, useAppSelector } from "@/hooks/useRedux";
 import { useSessionWithRedux } from "@/hooks/useSessionWithRedux";
+import { fetchContacts } from "@/store/slice/contactSlice";
 import { ArrowLeft, Plus, Search, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
 
 export default function ContactsPage() {
   const { session, status } = useSessionWithRedux();
 
   const { contacts } = useAppSelector((state) => state.contacts);
 
+  const dispatch = useAppDispatch();
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddContact, setShowAddContact] = useState(false);
   const router = useRouter();
@@ -32,46 +33,8 @@ export default function ContactsPage() {
   };
 
 
-  const handleAddContact = async ({
-    contactId,
-    contactName,
-    nickname,
-  }: {
-    contactId: string;
-    contactName: string;
-    nickname?: string;
-  }) => {
-    const payload = {
-      contactId,
-      contactName,
-      nickname: nickname || null,
-      action: "ADD_CONTACT",
-    };
-
-    try {
-      const response = await fetch("/api/contact", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to add contact.");
-      }
-
-      toast("Contact added", {
-        description: `You added ${contactName} (@${contactId})${nickname ? ` with nickname "${nickname}"` : ""
-          }.`,
-      });
-
-      setShowAddContact(false);
-    } catch (err: any) {
-      toast.error(err.message || "Something went wrong while adding contact.");
-    }
+  const handleContactSuccess = () => {
+    dispatch(fetchContacts());
   };
   const handleBack = () => {
     router.push("/dashboard");
@@ -161,11 +124,10 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      <AddContactDialog
+      <EnhancedAddContactDialog
         isOpen={showAddContact}
         onClose={() => setShowAddContact(false)}
-        currentUserId={session?.user?.uniqueID}
-        onAdd={handleAddContact}
+        onSuccess={handleContactSuccess}
       />
     </div>
   );

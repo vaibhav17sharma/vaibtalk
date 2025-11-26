@@ -18,6 +18,7 @@ interface ContactState {
   contacts: Contact[];
   loading: boolean;
   error: string | null;
+  initialized: boolean;
 }
 
 export const selectContactByUsername = (state: RootState, username: string) => {
@@ -49,6 +50,7 @@ const initialState: ContactState = {
   contacts: loadContactsFromSessionStorage(),
   loading: false,
   error: null,
+  initialized: false,
 };
 
 export const fetchContacts = createAsyncThunk("contacts/fetch", async () => {
@@ -77,12 +79,14 @@ const contactSlice = createSlice({
         (state, action: PayloadAction<Contact[]>) => {
           state.loading = false;
           state.contacts = action.payload;
+          state.initialized = true;
           saveContactsToSessionStorage(action.payload);
         }
       )
       .addCase(fetchContacts.rejected, (state, action) => {
         state.loading = false;
         state.error = action.error.message || "Something went wrong";
+        state.initialized = true; // Even if it failed, we tried
       });
   },
 });

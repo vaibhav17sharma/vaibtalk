@@ -169,11 +169,7 @@ export async function GET() {
         },
       },
     });
-    let response = {
-      ...contacts,
-      online: false
-    }
-    return NextResponse.json({ response });
+    return NextResponse.json({ contacts });
   } catch (error: any) {
     console.error("Error fetching contacts:", error);
     return NextResponse.json(

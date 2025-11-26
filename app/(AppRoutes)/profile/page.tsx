@@ -14,6 +14,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { useProcessPendingInvite } from "@/hooks/useInviteCodeHandler";
 import { useAppDispatch, useAppSelector } from "@/hooks/useRedux";
 import { useSessionWithRedux } from "@/hooks/useSessionWithRedux";
 import { dateFormat } from "@/lib/utils";
@@ -25,7 +26,7 @@ import { setUserProfile } from "@/store/slice/userProfileSlice";
 import { RootState } from "@/store/store";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
-import { AtSign, Calendar, Camera, Edit3, Mail, Save } from "lucide-react";
+import { AtSign, Calendar, Camera, Edit3, Mail, Save, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -40,6 +41,8 @@ export default function ProfilePage() {
   const { session, status, updateSession } = useSessionWithRedux();
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
+  const [hasPendingInvite, setHasPendingInvite] = useState(false);
+  const { processPendingInvite } = useProcessPendingInvite();
 
   const form = useForm<CompleteProfileValues>({
     resolver: zodResolver(completeProfileSchema),
@@ -66,19 +69,34 @@ export default function ProfilePage() {
             username: user.username || "",
             bio: user.bio || "",
           });
+          
+          // Check for suggested username from invite AFTER loading user data
+          const suggestedUsername = localStorage.getItem("suggestedUsername");
+          const pendingInvite = localStorage.getItem("pendingInviteCode");
+          
+          if (pendingInvite) {
+            setHasPendingInvite(true);
+          }
+          
+          if (suggestedUsername && !user.profileCompleted) {
+            form.setValue("username", suggestedUsername);
+          }
         }
       } catch (error) {
         console.error("Failed to fetch user", error);
       }
     };
     
-    if (userProfile === null) {
-      fetchUser();
-    }
+    // Always fetch fresh user data on mount
+    fetchUser();
   }, [status]);
 
   const onSubmit = async (data: CompleteProfileValues) => {
     if(!userProfile) return;
+    
+    // Store if profile was incomplete before this update
+    const wasProfileIncomplete = !userProfile.profileCompleted;
+    
     const updatedProfile = {
       ...{ id: userProfile.id, email: userProfile.email },
       ...data,
@@ -101,6 +119,13 @@ export default function ProfilePage() {
       if (res.status === 200) {
         await updateSession();
         toast.success("Profile saved!");
+        
+        // Process pending invite after profile completion
+        if (wasProfileIncomplete) {
+          console.log("Processing pending invite...");
+          await processPendingInvite();
+        }
+        
         router.refresh();
       } else {
         const errorMessage = res.data?.error || "Something went wrong.";
@@ -165,6 +190,18 @@ export default function ProfilePage() {
 
           {/* Profile Content */}
           <div className="pt-20 p-8">
+            {hasPendingInvite && !userProfile.profileCompleted && (
+              <div className="mb-4 p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+                <h3 className="text-lg font-medium mb-2 flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-cyan-500" />
+                  You have a pending invite!
+                </h3>
+                <p className="text-muted-foreground text-sm">
+                  Complete your profile to connect with the person who invited you.
+                </p>
+              </div>
+            )}
+            
             {!userProfile.profileCompleted && (
               <div className="mb-6 p-4 bg-purple-500/10 rounded-lg">
                 <h3 className="text-lg font-medium mb-2">

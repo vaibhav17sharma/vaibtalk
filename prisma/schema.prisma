@@ -4,26 +4,29 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider     = "postgresql"
+  url          = env("DATABASE_URL")
   relationMode = "prisma"
 }
 
 model User {
-  id               String       @id @default(uuid())
-  email            String       @unique
-  username         String       @unique
+  id               String           @id @default(uuid())
+  email            String           @unique
+  username         String           @unique
   name             String
   avatar           String?
   bio              String?
-  profileCompleted Boolean      @default(false)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  contacts         Contact[]    @relation("UserContacts")
-  contactOf        Contact[]    @relation("ContactUser")
-  sentMessages     Message[]    @relation("SenderMessages")
-  receivedMessages Message[]    @relation("ReceiverMessages")
+  profileCompleted Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  contacts         Contact[]        @relation("UserContacts")
+  contactOf        Contact[]        @relation("ContactUser")
+  sentMessages     Message[]        @relation("SenderMessages")
+  receivedMessages Message[]        @relation("ReceiverMessages")
   UserSession      UserSession?
+  sentRequests     ContactRequest[] @relation("SentRequests")
+  receivedRequests ContactRequest[] @relation("ReceivedRequests")
+  invitesCreated   InviteCode[]     @relation("InvitesCreated")
 
   @@index([username])
 }
@@ -61,7 +64,6 @@ model UserSession {
   @@index([isOnline])
 }
 
-
 model Message {
   id           String   @id @default(uuid())
   content      String
@@ -85,4 +87,38 @@ model Message {
   @@index([senderName])
   @@index([receiverName])
   @@index([expiresAt])
+}
+
+model ContactRequest {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     String   @default("pending") // pending, accepted, rejected
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sender   User @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
+}
+
+model InviteCode {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  inviterId       String
+  invitedUsername String?
+  used            Boolean  @default(false)
+  usedBy          String?
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+
+  inviter User @relation("InvitesCreated", fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([code])
+  @@index([inviterId])
+  @@index([used])
 }
