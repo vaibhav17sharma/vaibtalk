@@ -1,8 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -12,48 +11,52 @@ interface FeatureCardProps {
   title: string;
   description: string;
   link: string;
+  delay?: number;
 }
 
-export default function FeatureCard({ icon, title, description, link }: FeatureCardProps) {
+export default function FeatureCard({ icon, title, description, link, delay = 0 }: FeatureCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   
   return (
-    <Card 
-      className={cn(
-        "overflow-hidden border-purple-500/20 transition-all duration-300",
-        isHovered ? "bg-gradient-to-br from-background via-background to-purple-900/10 shadow-lg shadow-purple-500/5 scale-[1.02]" : "bg-black/40"
-      )}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.5, delay }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      className="group relative h-full"
     >
-      <CardHeader className="relative">
-        <div 
-          className={cn(
-            "absolute inset-0 bg-gradient-to-r opacity-0 transition-opacity duration-300",
-            isHovered ? "opacity-10" : "opacity-0"
-          )}
-          style={{ background: "linear-gradient(to right, #00FFFF, #FF00FF)" }}
-        ></div>
-        <div className="flex items-center justify-center h-16 w-16 rounded-lg bg-muted relative z-10">
+      <div className={cn(
+        "absolute inset-0 bg-gradient-to-br from-cyan-500/20 to-purple-500/20 rounded-2xl blur-xl transition-opacity duration-500",
+        isHovered ? "opacity-100" : "opacity-0"
+      )} />
+      
+      <div className="relative h-full bg-black/40 backdrop-blur-sm border border-white/10 rounded-2xl p-6 overflow-hidden transition-all duration-300 hover:border-white/20 hover:bg-black/60">
+        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+          <ArrowRight className="w-24 h-24 -rotate-45" />
+        </div>
+        
+        <div className="mb-6 inline-flex items-center justify-center w-14 h-14 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 group-hover:scale-110 transition-transform duration-300">
           {icon}
         </div>
-      </CardHeader>
-      <CardContent className="pb-6">
-        <h3 className="text-xl font-semibold mb-2">{title}</h3>
-        <p className="text-muted-foreground mb-4 line-clamp-2">{description}</p>
-        <Link href={link}>
-          <Button 
-            variant="ghost" 
-            className={cn(
-              "pl-0 group gap-2 transition-colors",
-              isHovered ? "text-purple-400" : "text-foreground"
-            )}
-          >
-            Explore
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </Button>
+        
+        <h3 className="text-xl font-bold mb-3 text-white group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-cyan-400 group-hover:to-purple-400 transition-all">
+          {title}
+        </h3>
+        
+        <p className="text-muted-foreground mb-6 leading-relaxed">
+          {description}
+        </p>
+        
+        <Link href={link} className="inline-flex items-center text-sm font-medium text-white/70 hover:text-white transition-colors">
+          Explore Feature 
+          <ArrowRight className={cn(
+            "ml-2 w-4 h-4 transition-transform duration-300",
+            isHovered ? "translate-x-1" : ""
+          )} />
         </Link>
-      </CardContent>
-    </Card>
+      </div>
+    </motion.div>
   );
 }
