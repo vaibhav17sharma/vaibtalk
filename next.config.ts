@@ -11,6 +11,14 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async rewrites() {
+    return [
+      {
+        source: '/peerjs/:path*',
+        destination: 'http://peerjs:9000/peerjs/:path*',
+      },
+    ];
+  },
 };
 
 export default nextConfig;

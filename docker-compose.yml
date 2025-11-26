@@ -1,15 +1,15 @@
 version: "3.8"
 
 services:
-  # PeerJS Server (Internal only - not exposed to host)
+  # PeerJS Server
   peerjs:
     image: peerjs/peerjs-server:latest
     container_name: vaibtalk-peerjs
     restart: unless-stopped
+    # Ports not exposed to host, accessed via Next.js rewrite
     environment:
       - PORT=9000
       - PEERJS_PATH=/peerjs
-    # No ports exposed - only accessible within Docker network
     command: >
       peerjs --port 9000 --path /peerjs --allow_discovery
     healthcheck:
@@ -33,6 +33,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_PEER_SERVER_HOST: ${NEXT_PUBLIC_PEER_SERVER_HOST:-}
+        NEXT_PUBLIC_PEER_SERVER_PORT: ${NEXT_PUBLIC_PEER_SERVER_PORT:-3000}
+        NEXT_PUBLIC_PEER_SERVER_PATH: ${NEXT_PUBLIC_PEER_SERVER_PATH:-/peerjs}
+        NEXT_PUBLIC_PEER_SERVER_SECURE: ${NEXT_PUBLIC_PEER_SERVER_SECURE:-false}
     container_name: vaibtalk-app
     restart: unless-stopped
     ports:
@@ -58,7 +63,7 @@ services:
       - ./prisma:/app/prisma
     command: >
       sh -c "
-        npx prisma migrate deploy &&
+        npx prisma@6.7.0 migrate deploy &&
         node server.js
       "
 

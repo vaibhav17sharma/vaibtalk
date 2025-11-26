@@ -33,6 +33,12 @@ type MediaCallbacks = {
   onMediaChange?: (peerID: string, type: "none" | "video" | "screen") => void;
 };
 
+// Helper to ensure IDs are PeerJS compatible (alphanumeric, dashes, underscores)
+const sanitizePeerId = (id: string) => {
+  if (!id) return "";
+  return id.replace(/[^a-zA-Z0-9_-]/g, "_");
+};
+
 export default function usePeerConnection(
   uniqueID: string,
   mediaCallbacks?: MediaCallbacks
@@ -183,11 +189,15 @@ export default function usePeerConnection(
         "[usePeerConnection] Creating Peer instance with ID:",
         uniqueID
       );
-      const peer = new Peer(uniqueID, {
-        host: "192.168.31.12",
-        port: 9000,
-        path: "/peer-server/vaibtalk",
-        secure: false,
+      const peerHost = process.env.NEXT_PUBLIC_PEER_SERVER_HOST;
+      const host = (peerHost && peerHost !== "localhost") ? peerHost : window.location.hostname;
+      const sanitizedId = sanitizePeerId(uniqueID);
+      
+      const peer = new Peer(sanitizedId, {
+        host: host,
+        port: Number(process.env.NEXT_PUBLIC_PEER_SERVER_PORT) || 9000,
+        path: process.env.NEXT_PUBLIC_PEER_SERVER_PATH || "/peerjs",
+        secure: process.env.NEXT_PUBLIC_PEER_SERVER_SECURE === "true",
         config: {
           iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
         },
@@ -198,6 +208,10 @@ export default function usePeerConnection(
       peer.on("open", (id) => {
         console.log("[usePeerConnection] Peer open with ID:", id);
         dispatch(setPeerId(id));
+      });
+
+      peer.on("error", (err) => {
+        console.error("[usePeerConnection] Peer error:", err);
       });
 
       peer.on("connection", (conn) => {
@@ -256,27 +270,29 @@ export default function usePeerConnection(
         };
 
         answerCall();
-
-        return () => {
-          peerManager.reset();
-        };
       });
+
+      return () => {
+        console.log("[usePeerConnection] Cleaning up Peer instance");
+        peerManager.reset();
+      };
     }
   }, [uniqueID, setupConnection, dispatch]);
 
   const connect = useCallback(
     (targetId: string) => {
+      const sanitizedTargetId = sanitizePeerId(targetId);
       if (!peerManager.peer) {
         console.warn("[usePeerConnection] No Peer instance available");
         return;
       }
-      if (peerManager.hasConnection(targetId)) {
-        console.log("[usePeerConnection] Already connected to", targetId);
+      if (peerManager.hasConnection(sanitizedTargetId)) {
+        console.log("[usePeerConnection] Already connected to", sanitizedTargetId);
         return;
       }
       dispatch(setConnectionStatus("connecting"));
-      console.log("[usePeerConnection] Connecting to peer:", targetId);
-      const conn = peerManager.peer.connect(targetId);
+      console.log("[usePeerConnection] Connecting to peer:", sanitizedTargetId);
+      const conn = peerManager.peer.connect(sanitizedTargetId);
       setupConnection(conn);
     },
     [dispatch, setupConnection]
@@ -284,24 +300,26 @@ export default function usePeerConnection(
 
   const disconnect = useCallback(
     (targetId: string) => {
-      console.log("[usePeerConnection] Disconnecting from peer:", targetId);
-      peerManager.removeConnection(targetId);
-      dispatch(removeConnection(targetId));
-      endMedia(targetId);
+      const sanitizedTargetId = sanitizePeerId(targetId);
+      console.log("[usePeerConnection] Disconnecting from peer:", sanitizedTargetId);
+      peerManager.removeConnection(sanitizedTargetId);
+      dispatch(removeConnection(sanitizedTargetId));
+      endMedia(sanitizedTargetId);
     },
     [dispatch]
   );
 
   const switchMedia = useCallback(
     async (targetId: string, mediaType: "video" | "screen" | "none") => {
-      if (!peerManager.peer || !peerManager.hasConnection(targetId)) {
+      const sanitizedTargetId = sanitizePeerId(targetId);
+      if (!peerManager.peer || !peerManager.hasConnection(sanitizedTargetId)) {
         console.warn(
           "[usePeerConnection] Cannot switch media, missing peer or connection"
         );
         return;
       }
-      peerManager.removeMediaConnection(targetId);
-      dispatch(removeMediaConnection(targetId));
+      peerManager.removeMediaConnection(sanitizedTargetId);
+      dispatch(removeMediaConnection(sanitizedTargetId));
       try {
         let stream: MediaStream | null = null;
 
@@ -317,31 +335,31 @@ export default function usePeerConnection(
         } else if (mediaType === "none") stream = new MediaStream();
 
         localMediaStreamRef.current = stream as MediaStream;
-        const call = peerManager.peer.call(targetId, stream as MediaStream);
+        const call = peerManager.peer.call(sanitizedTargetId, stream as MediaStream);
         peerManager.addMediaConnection(call);
-        dispatch(addMediaConnection(targetId));
-        dispatch(setActiveMediaType({ peerId: targetId, type: mediaType }));
-        mediaCallbacksRef.current?.onMediaChange?.(targetId, mediaType);
+        dispatch(addMediaConnection(sanitizedTargetId));
+        dispatch(setActiveMediaType({ peerId: sanitizedTargetId, type: mediaType }));
+        mediaCallbacksRef.current?.onMediaChange?.(sanitizedTargetId, mediaType);
 
         call.on("stream", (remoteStream) => {
           console.log(
             "[usePeerConnection] Received remote stream from:",
-            targetId
+            sanitizedTargetId
           );
-          mediaCallbacksRef.current?.onStream?.(targetId, remoteStream);
+          mediaCallbacksRef.current?.onStream?.(sanitizedTargetId, remoteStream);
         });
 
         call.on("close", () => {
-          console.log("[usePeerConnection] Media call closed with:", targetId);
-          peerManager.removeMediaConnection(targetId);
-          dispatch(removeMediaConnection(targetId));
-          mediaCallbacksRef.current?.onMediaChange?.(targetId, "none");
+          console.log("[usePeerConnection] Media call closed with:", sanitizedTargetId);
+          peerManager.removeMediaConnection(sanitizedTargetId);
+          dispatch(removeMediaConnection(sanitizedTargetId));
+          mediaCallbacksRef.current?.onMediaChange?.(sanitizedTargetId, "none");
         });
 
         return call;
       } catch (err) {
         console.error("[usePeerConnection] Error switching media:", err);
-        dispatch(setActiveMediaType({ peerId: targetId, type: "none" }));
+        dispatch(setActiveMediaType({ peerId: sanitizedTargetId, type: "none" }));
       }
     },
     [dispatch]
@@ -349,10 +367,11 @@ export default function usePeerConnection(
 
   const endMedia = useCallback(
     (targetId: string) => {
-      console.log("[usePeerConnection] Ending media with:", targetId);
-      peerManager.removeMediaConnection(targetId);
-      dispatch(removeMediaConnection(targetId));
-      mediaCallbacksRef.current?.onMediaChange?.(targetId, "none");
+      const sanitizedTargetId = sanitizePeerId(targetId);
+      console.log("[usePeerConnection] Ending media with:", sanitizedTargetId);
+      peerManager.removeMediaConnection(sanitizedTargetId);
+      dispatch(removeMediaConnection(sanitizedTargetId));
+      mediaCallbacksRef.current?.onMediaChange?.(sanitizedTargetId, "none");
 
       if (localMediaStreamRef.current) {
         localMediaStreamRef.current
@@ -366,15 +385,16 @@ export default function usePeerConnection(
 
   const sendMessage = useCallback(
     (message: string, toPeerId: string) => {
-      const conn = peerManager.getConnection(toPeerId);
-      console.log("[usePeerConnection] sendMessage", message, "to", toPeerId);
+      const sanitizedToPeerId = sanitizePeerId(toPeerId);
+      const conn = peerManager.getConnection(sanitizedToPeerId);
+      console.log("[usePeerConnection] sendMessage", message, "to", sanitizedToPeerId);
       if (conn?.open) {
         conn.send(message);
-        console.log("[usePeerConnection] Message sent to", toPeerId);
+        console.log("[usePeerConnection] Message sent to", sanitizedToPeerId);
         dispatch(
           addMessage({
-            sender: uniqueID,
-            receiver: toPeerId,
+            sender: uniqueID, // Keep original ID for chat logic/display
+            receiver: toPeerId, // Keep original ID for chat logic/display
             content: message,
             type: "text",
           })
@@ -382,9 +402,9 @@ export default function usePeerConnection(
       } else {
         console.warn(
           "[usePeerConnection] Connection not open, queueing message for",
-          toPeerId
+          sanitizedToPeerId
         );
-        dispatch(enqueueMessage({ toPeerId, message }));
+        dispatch(enqueueMessage({ toPeerId: sanitizedToPeerId, message }));
       }
     },
     [dispatch, uniqueID]
