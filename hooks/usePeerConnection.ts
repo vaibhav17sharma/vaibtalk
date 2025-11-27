@@ -92,6 +92,16 @@ export default function usePeerConnection(
         conn.peerConnection.addEventListener('connectionstatechange', () => {
           console.log(`[usePeerConnection] Connection state changed for ${conn.peer}:`, conn.peerConnection?.connectionState);
         });
+        conn.peerConnection.addEventListener('icegatheringstatechange', () => {
+          console.log(`[usePeerConnection] ICE gathering state changed for ${conn.peer}:`, conn.peerConnection?.iceGatheringState);
+        });
+        conn.peerConnection.addEventListener('icecandidate', (event) => {
+          if (event.candidate) {
+            console.log(`[usePeerConnection] ICE candidate found for ${conn.peer}:`, event.candidate.type);
+          } else {
+            console.log(`[usePeerConnection] ICE candidate gathering complete for ${conn.peer}`);
+          }
+        });
       }
 
       conn.on("open", () => {
@@ -320,7 +330,7 @@ export default function usePeerConnection(
   }, [uniqueID, setupConnection, dispatch]);
 
   const connect = useCallback(
-    (targetId: string) => {
+    async (targetId: string) => {
       const sanitizedTargetId = sanitizePeerId(targetId);
       if (!peerManager.peer) {
         console.warn("[usePeerConnection] No Peer instance available");
@@ -330,12 +340,67 @@ export default function usePeerConnection(
         console.log("[usePeerConnection] Already connected to", sanitizedTargetId);
         return;
       }
+      
+      // Check if peer exists on the server first
+      try {
+        console.log("[usePeerConnection] Checking if peer exists:", sanitizedTargetId);
+        const response = await fetch(
+          `${peerManager.peer.options.secure ? 'https' : 'http'}://${peerManager.peer.options.host}:${peerManager.peer.options.port}${peerManager.peer.options.path}/peerjs/peers`,
+          { method: 'GET' }
+        );
+        
+        if (response.ok) {
+          const peers = await response.json();
+          console.log("[usePeerConnection] Available peers:", peers);
+          
+          if (!peers.includes(sanitizedTargetId)) {
+            console.error(
+              `[usePeerConnection] Peer ${sanitizedTargetId} is NOT online!`,
+              `\nAvailable peers: ${peers.join(', ') || 'none'}`
+            );
+            dispatch(setConnectionStatus("disconnected"));
+            // Still attempt connection in case the API is outdated
+          } else {
+            console.log(`[usePeerConnection] ✓ Peer ${sanitizedTargetId} is online`);
+          }
+        }
+      } catch (error) {
+        console.warn("[usePeerConnection] Could not check peer existence:", error);
+        // Continue anyway
+      }
+      
       dispatch(setConnectionStatus("connecting"));
       console.log("[usePeerConnection] Connecting to peer:", sanitizedTargetId);
-      const conn = peerManager.peer.connect(sanitizedTargetId);
+      
+      const conn = peerManager.peer.connect(sanitizedTargetId, {
+        reliable: true,
+        metadata: { connectingFrom: uniqueID }
+      });
+      
+      // Set a timeout to detect stuck connections
+      const connectionTimeout = setTimeout(() => {
+        if (!conn.open) {
+          console.error(
+            `[usePeerConnection] Connection to ${sanitizedTargetId} timed out after 10s.`,
+            "Possible reasons:",
+            "\n1. Peer is not online/connected to PeerJS server",
+            "\n2. Peer ID doesn't exist",
+            "\n3. Network/firewall blocking connection",
+            "\nConnection state:", conn.peerConnection?.connectionState,
+            "\nICE state:", conn.peerConnection?.iceConnectionState
+          );
+          dispatch(setConnectionStatus("disconnected"));
+        }
+      }, 10000);
+      
+      // Clear timeout when connection opens
+      conn.on("open", () => {
+        clearTimeout(connectionTimeout);
+      });
+      
       setupConnection(conn);
     },
-    [dispatch, setupConnection]
+    [dispatch, setupConnection, uniqueID]
   );
 
   const disconnect = useCallback(
