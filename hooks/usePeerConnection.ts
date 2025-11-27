@@ -51,6 +51,9 @@ export default function usePeerConnection(
   const activeMediaType = useAppSelector(
     (state: RootState) => state.peer.activeMediaType
   );
+  const messageQueue = useAppSelector(
+    (state: RootState) => state.peer.messageQueue
+  );
 
   const localMediaStreamRef = useRef<MediaStream | null>(null);
 
@@ -62,13 +65,47 @@ export default function usePeerConnection(
   const setupConnection = useCallback(
     (conn: DataConnection) => {
       console.log("[usePeerConnection] Setting up connection with:", conn.peer);
+      console.log("[usePeerConnection] Initial connection state:", {
+        open: conn.open,
+        connectionState: conn.peerConnection?.connectionState,
+        iceConnectionState: conn.peerConnection?.iceConnectionState
+      });
 
       peerManager.addConnection(conn);
       dispatch(addConnection(conn.peer));
 
-      conn.on("open", () => {
-        console.log("[usePeerConnection] Connection open with:", conn.peer);
+      // Check if connection is already open (race condition fix)
+      if (conn.open) {
+        console.log("[usePeerConnection] Connection already open with:", conn.peer);
         dispatch(setConnectionStatus("connected"));
+        dispatch(clearMessageQueue(conn.peer));
+      }
+
+      // Monitor ICE connection state for debugging
+      if (conn.peerConnection) {
+        conn.peerConnection.addEventListener('iceconnectionstatechange', () => {
+          console.log(`[usePeerConnection] ICE connection state changed for ${conn.peer}:`, conn.peerConnection?.iceConnectionState);
+        });
+        conn.peerConnection.addEventListener('connectionstatechange', () => {
+          console.log(`[usePeerConnection] Connection state changed for ${conn.peer}:`, conn.peerConnection?.connectionState);
+        });
+      }
+
+      conn.on("open", () => {
+        console.log("[usePeerConnection] Connection open event fired for:", conn.peer);
+        dispatch(setConnectionStatus("connected"));
+        
+        // Send any queued messages
+        const queuedMessages = messageQueue[conn.peer] || [];
+        console.log(`[usePeerConnection] Sending ${queuedMessages.length} queued messages to ${conn.peer}`);
+        
+        queuedMessages.forEach((message: string) => {
+          if (conn.open) {
+            conn.send(message);
+            console.log("[usePeerConnection] Sent queued message to", conn.peer);
+          }
+        });
+        
         dispatch(clearMessageQueue(conn.peer));
       });
 
@@ -180,7 +217,7 @@ export default function usePeerConnection(
         dispatch(setConnectionStatus("disconnected"));
       });
     },
-    [dispatch, uniqueID]
+    [dispatch, uniqueID, messageQueue]
   );
 
   useEffect(() => {
@@ -388,6 +425,11 @@ export default function usePeerConnection(
       const sanitizedToPeerId = sanitizePeerId(toPeerId);
       const conn = peerManager.getConnection(sanitizedToPeerId);
       console.log("[usePeerConnection] sendMessage", message, "to", sanitizedToPeerId);
+      console.log("[usePeerConnection] Connection exists:", !!conn);
+      console.log("[usePeerConnection] Connection open:", conn?.open);
+      console.log("[usePeerConnection] Connection peerConnection state:", conn?.peerConnection?.connectionState);
+      console.log("[usePeerConnection] Connection peerConnection iceConnectionState:", conn?.peerConnection?.iceConnectionState);
+      
       if (conn?.open) {
         conn.send(message);
         console.log("[usePeerConnection] Message sent to", sanitizedToPeerId);
@@ -404,6 +446,13 @@ export default function usePeerConnection(
           "[usePeerConnection] Connection not open, queueing message for",
           sanitizedToPeerId
         );
+        console.warn("[usePeerConnection] Connection state details:", {
+          exists: !!conn,
+          open: conn?.open,
+          peer: conn?.peer,
+          connectionState: conn?.peerConnection?.connectionState,
+          iceConnectionState: conn?.peerConnection?.iceConnectionState
+        });
         dispatch(enqueueMessage({ toPeerId: sanitizedToPeerId, message }));
       }
     },

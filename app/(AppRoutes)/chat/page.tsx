@@ -13,18 +13,18 @@ import { cn } from "@/lib/utils";
 import { makeSelectMessages } from "@/store/slice/chatbookSlice";
 import EmojiPicker from "emoji-picker-react";
 import {
-  AlertTriangle,
-  ArrowLeft,
-  Camera,
-  FileText,
-  ImageIcon,
-  Mic,
-  Paperclip,
-  Send,
-  Smile,
-  User,
-  UserPlus,
-  Video as VideoIcon
+    AlertTriangle,
+    ArrowLeft,
+    Camera,
+    FileText,
+    ImageIcon,
+    Mic,
+    Paperclip,
+    Send,
+    Smile,
+    User,
+    UserPlus,
+    Video as VideoIcon
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -133,7 +133,7 @@ export default function ChatPage() {
   } = usePeerConnection(currentUser);
 
   useEffect(() => {
-    if (activePeer?.id) {
+    if (activePeer?.username) {
       connect(activePeer.username);
     }
   }, [activePeer, connect]);
@@ -161,7 +161,7 @@ export default function ChatPage() {
   // }, [mediaBlobUrl, isRecording]);
 
   const handleConnect = () => {
-    if (activePeer?.id) {
+    if (activePeer?.username) {
       connect(activePeer.username);
     }
   };

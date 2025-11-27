@@ -1,7 +1,7 @@
 "use client";
 
 import EnhancedAddContactDialog from "@/components/dashboard/EnhancedAddContactDialog";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAppDispatch, useAppSelector } from "@/hooks/useRedux";
@@ -103,6 +103,10 @@ export default function ContactsPage() {
                         >
                           <div className="relative">
                             <Avatar>
+                              <AvatarImage 
+                                src={contact.avatar} 
+                                alt={contact.name}
+                              />
                               <AvatarFallback className="bg-gradient-to-r from-cyan-500 to-purple-500 text-white">
                                 {contact.name.split(' ').map(n => n[0]).join('')}
                               </AvatarFallback>
