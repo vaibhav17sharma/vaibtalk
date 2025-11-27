@@ -6,25 +6,26 @@ import FileUploadModal from "@/components/chat/FileUploadModal";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import usePeerConnection from "@/hooks/usePeerConnection";
-import { useAppSelector } from "@/hooks/useRedux";
+import { usePeerActions } from "@/hooks/usePeerActions";
+import { useAppDispatch, useAppSelector } from "@/hooks/useRedux";
 import { useSessionWithRedux } from "@/hooks/useSessionWithRedux";
 import { cn } from "@/lib/utils";
 import { makeSelectMessages } from "@/store/slice/chatbookSlice";
+import { clearActiveContact, setActiveContact } from "@/store/slice/peerSlice";
 import EmojiPicker from "emoji-picker-react";
 import {
-    AlertTriangle,
-    ArrowLeft,
-    Camera,
-    FileText,
-    ImageIcon,
-    Mic,
-    Paperclip,
-    Send,
-    Smile,
-    User,
-    UserPlus,
-    Video as VideoIcon
+  AlertTriangle,
+  ArrowLeft,
+  Camera,
+  FileText,
+  ImageIcon,
+  Mic,
+  Paperclip,
+  Send,
+  Smile,
+  User,
+  UserPlus,
+  Video as VideoIcon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -37,6 +38,7 @@ const VoiceRecorder = dynamic(() => import("@/components/chat/VoiceRecorder"), {
 export default function ChatPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const dispatch = useAppDispatch();
 
   const [navbarHeight, setNavbarHeight] = useState(0);
 
@@ -49,17 +51,55 @@ export default function ChatPage() {
 
   const { session } = useSessionWithRedux();
   const { contacts } = useAppSelector((state) => state.contacts);
+  const activeContact = useAppSelector((state) => state.peer.activeContact);
 
   const [activePeer, setActivePeer] = useState<any>(null);
   const currentUser = session?.user.uniqueID as string;
   let activePeerId = activePeer?.username as string;
   const [isInContacts, setIsInContacts] = useState(true);
 
+  // Handle active contact from Redux or URL params (backward compatibility)
   useEffect(() => {
+    // Try Redux first
+    if (activeContact && activeContact.type === "chat") {
+      const peer = contacts.find((c) => c.username === activeContact.username);
+      if (peer) {
+        setActivePeer({
+          ...peer,
+          name: activeContact.name || peer.contactName,
+          avatar: activeContact.avatar || peer.avatar,
+          online: peer.online,
+        });
+        activePeerId = peer.username as string;
+        setIsInContacts(true);
+      } else {
+        // Contact not in list but in Redux
+        setActivePeer({
+          username: activeContact.username,
+          name: activeContact.name || activeContact.username,
+          avatar: activeContact.avatar,
+          online: false,
+        });
+        activePeerId = activeContact.username;
+        setIsInContacts(false);
+      }
+      return;
+    }
+
+    // Fallback to URL params for backward compatibility
     const contactId = searchParams.get("contact");
     if (contactId) {
       const peer = contacts.find((c) => c.username === contactId);
       if (peer) {
+        // Populate Redux from URL param
+        dispatch(
+          setActiveContact({
+            username: peer.username,
+            name: peer.contactName,
+            avatar: peer.avatar as string,
+            type: "chat",
+          })
+        );
         setActivePeer({
           ...peer,
           online: peer.online,
@@ -67,7 +107,7 @@ export default function ChatPage() {
         activePeerId = peer.username as string;
         setIsInContacts(true);
       } else {
-        // Handle unknown contact - create a temporary peer object
+        // Unknown contact from URL
         setActivePeer({
           username: contactId,
           name: contactId,
@@ -76,11 +116,19 @@ export default function ChatPage() {
         activePeerId = contactId;
         setIsInContacts(false);
       }
-    } else {
+    } else if (!activeContact) {
+      // No contact selected at all
       router.push("/contacts");
       toast.error("Please select a contact to chat with.");
     }
-  }, [contacts, searchParams]);
+  }, [contacts, searchParams, activeContact, dispatch, router]);
+
+  // Clear active contact on unmount
+  useEffect(() => {
+    return () => {
+      dispatch(clearActiveContact());
+    };
+  }, [dispatch]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [messageInput, setMessageInput] = useState("");
@@ -92,7 +140,6 @@ export default function ChatPage() {
   const [isVoiceRecorderVisible, setIsVoiceRecorderVisible] = useState(false);
   const [showMediaOptions, setShowMediaOptions] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-
 
   const selectMessages = useMemo(
     () => makeSelectMessages(currentUser, activePeerId),
@@ -130,14 +177,13 @@ export default function ChatPage() {
     sendFile,
     connectionStatus,
     connect,
-  } = usePeerConnection(currentUser);
+  } = usePeerActions();
 
   useEffect(() => {
     if (activePeer?.username) {
       connect(activePeer.username);
     }
   }, [activePeer, connect]);
-
 
   // useEffect(() => {
   //   if (mediaBlobUrl && !isRecording) {
@@ -171,14 +217,14 @@ export default function ChatPage() {
 
   const handleSendMessage = () => {
     if (!messageInput.trim() || !activePeer || !isInContacts) return;
-    sendPeerMessage(messageInput, activePeer.username);
+    sendPeerMessage(messageInput, activePeer.username, currentUser);
     setMessageInput("");
   };
 
-  const handleVoiceUpload = async (file: File) => {    
+  const handleVoiceUpload = async (file: File) => {
     try {
       setIsVoiceRecorderVisible(false);
-      const success = await sendFile(file, activePeer.username);
+      const success = await sendFile(file, activePeer.username, currentUser);
 
       if (success) {
         toast.success("File sent", {
@@ -205,7 +251,7 @@ export default function ChatPage() {
     try {
       setShowFileUpload(false);
 
-      const success = await sendFile(file, activePeer.username);
+      const success = await sendFile(file, activePeer.username, currentUser);
 
       if (success) {
         toast.success("File sent", {
@@ -255,10 +301,10 @@ export default function ChatPage() {
   const changeChatMessage = (peer: any) => {
     setActivePeer(peer);
   };
-  
+
   const handleAddToContacts = async () => {
     if (!activePeer) return;
-    
+
     try {
       const response = await fetch("/api/contact", {
         method: "POST",
@@ -279,9 +325,11 @@ export default function ChatPage() {
       }
 
       toast.success("Contact added", {
-        description: `You added ${activePeer.name || activePeer.username} to your contacts.`,
+        description: `You added ${
+          activePeer.name || activePeer.username
+        } to your contacts.`,
       });
-      
+
       setIsInContacts(true);
     } catch (err: any) {
       toast.error(err.message || "Something went wrong while adding contact.");
@@ -338,9 +386,9 @@ export default function ChatPage() {
           </div>
           <div className="flex items-center gap-2">
             {!isInContacts && (
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleAddToContacts}
                 className="mr-2 text-xs flex items-center gap-1"
               >
@@ -352,13 +400,17 @@ export default function ChatPage() {
             </Button>
           </div>
         </div>
-        
+
         {!isInContacts && (
           <div className="bg-amber-500/10 border-l-4 border-amber-500 p-3 flex items-center gap-2">
             <AlertTriangle className="text-amber-500 w-5 h-5" />
             <div>
-              <p className="text-sm font-medium">This person is not in your contacts</p>
-              <p className="text-xs text-muted-foreground">Add them to your contacts to send messages</p>
+              <p className="text-sm font-medium">
+                This person is not in your contacts
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Add them to your contacts to send messages
+              </p>
             </div>
           </div>
         )}
@@ -489,8 +541,8 @@ export default function ChatPage() {
               disabled={!isInContacts}
               className={cn(
                 "rounded-full",
-                isInContacts 
-                  ? "bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600" 
+                isInContacts
+                  ? "bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600"
                   : "bg-gray-500 opacity-50 cursor-not-allowed"
               )}
               title={!isInContacts ? "Add to contacts first" : "Send message"}

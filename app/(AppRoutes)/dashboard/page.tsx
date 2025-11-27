@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useInviteCodeHandler } from "@/hooks/useInviteCodeHandler";
-import usePeerConnection from "@/hooks/usePeerConnection";
 import { useAppDispatch, useAppSelector } from "@/hooks/useRedux";
 import { useSessionWithRedux } from "@/hooks/useSessionWithRedux";
 import { fetchContacts } from "@/store/slice/contactSlice";
@@ -120,7 +119,6 @@ export default function DashboardPage() {
       .catch(() => {});
   };
 
-  const { peerId } = usePeerConnection(session?.user?.uniqueID as string);
   useInviteCodeHandler(); // Handle invite codes from URL
 
 

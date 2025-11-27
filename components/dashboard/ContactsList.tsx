@@ -8,7 +8,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAppDispatch } from "@/hooks/useRedux";
+import { setActiveContact } from "@/store/slice/peerSlice";
 import { MessageSquare, MoreVertical, UserMinus } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 interface Contact {
@@ -29,6 +32,8 @@ interface ContactsListProps {
 }
 
 export default function ContactsList({ contacts }: ContactsListProps) {
+  const dispatch = useAppDispatch();
+  const router = useRouter();
   const removeContact = async (contact: Contact) => {
     try {
       const response = await fetch("/api/contact", {
@@ -112,7 +117,15 @@ export default function ContactsList({ contacts }: ContactsListProps) {
             <div className="flex items-center gap-1">
               <Button
                 onClick={() => {
-                  window.location.href = `/chat?contact=${contact.username}`;
+                  dispatch(
+                    setActiveContact({
+                      username: contact.username,
+                      name: contact.contactName,
+                      avatar: contact.avatar as string,
+                      type: "chat",
+                    })
+                  );
+                  router.push("/chat");
                 }}
                 variant="ghost"
                 size="icon"

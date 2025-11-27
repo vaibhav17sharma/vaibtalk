@@ -8,6 +8,12 @@ export interface PeerState {
   connectionStatus: "disconnected" | "connecting" | "connected";
   activeMediaType: Record<string, MediaType>;
   messageQueue: Record<string, any[]>;
+  activeContact: {
+    username: string;
+    name?: string;
+    avatar?: string;
+    type: "chat" | "call" | null;
+  } | null;
   fileTransfers: Record<
     string,
     {
@@ -29,6 +35,7 @@ const initialState: PeerState = {
   connectionStatus: "disconnected",
   activeMediaType: {},
   messageQueue: {},
+  activeContact: null,
   fileTransfers: {},
 };
 
@@ -92,6 +99,20 @@ const peerSlice = createSlice({
     clearMessageQueue(state, action: PayloadAction<string>) {
       delete state.messageQueue[action.payload];
     },
+    setActiveContact(
+      state,
+      action: PayloadAction<{
+        username: string;
+        name?: string;
+        avatar?: string;
+        type: "chat" | "call";
+      }>
+    ) {
+      state.activeContact = { ...action.payload, type: action.payload.type };
+    },
+    clearActiveContact(state) {
+      state.activeContact = null;
+    },
     startFileTransfer(
       state,
       action: PayloadAction<{
@@ -152,6 +173,8 @@ export const {
   setActiveMediaType,
   enqueueMessage,
   clearMessageQueue,
+  setActiveContact,
+  clearActiveContact,
   startFileTransfer,
   updateTransferProgress,
   completeFileTransfer,
