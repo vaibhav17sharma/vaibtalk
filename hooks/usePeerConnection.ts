@@ -16,6 +16,7 @@ import {
   removeMediaConnection,
   setActiveMediaType,
   setConnectionStatus,
+  setIncomingCall,
   setPeerId,
   startFileTransfer,
   updateTransferProgress,
@@ -283,43 +284,19 @@ export default function usePeerConnection(
           return;
         }
 
-        const answerCall = async () => {
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-              video: true,
-              audio: true,
-            });
-            call.answer(stream);
-            peerManager.addMediaConnection(call);
-            dispatch(addMediaConnection(call.peer));
-
-            call.on("stream", (remoteStream) => {
-              console.log(
-                "[usePeerConnection] Received remote media stream from:",
-                call.peer
-              );
-              mediaCallbacksRef.current?.onStream?.(call.peer, remoteStream);
-              dispatch(
-                setActiveMediaType({ peerId: call.peer, type: "video" })
-              );
-            });
-
-            call.on("close", () => {
-              console.log(
-                "[usePeerConnection] Media call closed with:",
-                call.peer
-              );
-              peerManager.removeMediaConnection(call.peer);
-              dispatch(removeMediaConnection(call.peer));
-              mediaCallbacksRef.current?.onMediaChange?.(call.peer, "none");
-            });
-          } catch (error) {
-            console.error("[usePeerConnection] Failed to answer call:", error);
-            call.close();
+        // Store the call and notify Redux
+        peerManager.pendingCall = call;
+        dispatch(setIncomingCall({ callerId: call.peer, type: "video" }));
+        console.log("[usePeerConnection] Incoming call stored, waiting for user acceptance");
+        
+        // Handle if the caller cancels before we answer
+        call.on("close", () => {
+          console.log("[usePeerConnection] Incoming call cancelled by caller");
+          if (peerManager.pendingCall === call) {
+            peerManager.pendingCall = null;
+            dispatch(setIncomingCall(null));
           }
-        };
-
-        answerCall();
+        });
       });
 
       return () => {

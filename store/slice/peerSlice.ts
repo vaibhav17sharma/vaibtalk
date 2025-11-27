@@ -14,6 +14,10 @@ export interface PeerState {
     avatar?: string;
     type: "chat" | "call" | null;
   } | null;
+  incomingCall: {
+    callerId: string;
+    type: "video" | "audio";
+  } | null;
   fileTransfers: Record<
     string,
     {
@@ -36,6 +40,7 @@ const initialState: PeerState = {
   activeMediaType: {},
   messageQueue: {},
   activeContact: null,
+  incomingCall: null,
   fileTransfers: {},
 };
 
@@ -113,6 +118,9 @@ const peerSlice = createSlice({
     clearActiveContact(state) {
       state.activeContact = null;
     },
+    setIncomingCall(state, action: PayloadAction<{ callerId: string; type: "video" | "audio" } | null>) {
+      state.incomingCall = action.payload;
+    },
     startFileTransfer(
       state,
       action: PayloadAction<{
@@ -175,6 +183,7 @@ export const {
   clearMessageQueue,
   setActiveContact,
   clearActiveContact,
+  setIncomingCall,
   startFileTransfer,
   updateTransferProgress,
   completeFileTransfer,

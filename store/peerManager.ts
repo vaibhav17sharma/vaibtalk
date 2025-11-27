@@ -4,6 +4,15 @@ class PeerManager {
   private _peer: Peer | null = null;
   private _connections: Map<string, DataConnection> = new Map();
   private _mediaConnections: Map<string, MediaConnection> = new Map();
+  private _pendingCall: MediaConnection | null = null;
+
+  get pendingCall(): MediaConnection | null {
+    return this._pendingCall;
+  }
+
+  set pendingCall(call: MediaConnection | null) {
+    this._pendingCall = call;
+  }
 
   private _fileTransfers = new Map<
     string,

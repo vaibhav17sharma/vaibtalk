@@ -4,8 +4,16 @@ import peerManager from "@/store/peerManager";
 import {
   addMessage,
 } from "@/store/slice/chatbookSlice";
-import { enqueueMessage } from "@/store/slice/peerSlice";
+import {
+  addMediaConnection,
+  enqueueMessage,
+  removeMediaConnection,
+  setActiveContact,
+  setActiveMediaType,
+  setIncomingCall,
+} from "@/store/slice/peerSlice";
 import { RootState } from "@/store/store";
+import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { useAppDispatch, useAppSelector } from "./useRedux";
 
@@ -15,6 +23,7 @@ import { useAppDispatch, useAppSelector } from "./useRedux";
  */
 export function usePeerActions() {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const peerId = useAppSelector((state: RootState) => state.peer.peerId);
   const connectionStatus = useAppSelector(
     (state: RootState) => state.peer.connectionStatus
@@ -153,6 +162,7 @@ export function usePeerActions() {
         } else if (mediaType === "screen") {
           stream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
+            audio: false,
           });
         } else if (mediaType === "none") {
           stream = new MediaStream();
@@ -178,6 +188,65 @@ export function usePeerActions() {
     []
   );
 
+  const acceptIncomingCall = useCallback(async () => {
+    const call = peerManager.pendingCall;
+    if (!call) {
+      console.warn("[usePeerActions] No pending call to accept");
+      return;
+    }
+
+    try {
+      console.log("[usePeerActions] Accepting call from:", call.peer);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      
+      call.answer(stream);
+      peerManager.addMediaConnection(call);
+      dispatch(addMediaConnection(call.peer));
+      
+      // Clear pending call state
+      peerManager.pendingCall = null;
+      dispatch(setIncomingCall(null));
+
+      // Set active contact and redirect
+      dispatch(setActiveContact({
+        username: call.peer,
+        type: "call",
+      }));
+      
+      router.push("/call");
+
+      call.on("stream", (remoteStream) => {
+        console.log("[usePeerActions] Received remote stream from:", call.peer);
+        dispatch(setActiveMediaType({ peerId: call.peer, type: "video" }));
+      });
+
+      call.on("close", () => {
+        console.log("[usePeerActions] Call closed with:", call.peer);
+        peerManager.removeMediaConnection(call.peer);
+        dispatch(removeMediaConnection(call.peer));
+      });
+
+    } catch (error) {
+      console.error("[usePeerActions] Failed to accept call:", error);
+      call.close();
+      peerManager.pendingCall = null;
+      dispatch(setIncomingCall(null));
+    }
+  }, [dispatch, router]);
+
+  const rejectIncomingCall = useCallback(() => {
+    const call = peerManager.pendingCall;
+    if (call) {
+      console.log("[usePeerActions] Rejecting call from:", call.peer);
+      call.close();
+      peerManager.pendingCall = null;
+    }
+    dispatch(setIncomingCall(null));
+  }, [dispatch]);
+
   return {
     peerId,
     connectionStatus,
@@ -186,5 +255,7 @@ export function usePeerActions() {
     connect,
     switchMedia,
     endMedia,
+    acceptIncomingCall,
+    rejectIncomingCall,
   };
 }
