@@ -44,7 +44,11 @@ export function usePeerActions() {
       console.log("[usePeerActions] Connection open:", conn?.open);
       
       if (conn?.open) {
-        conn.send(message);
+        conn.send({
+          type: "text",
+          content: message,
+          senderId: fromPeerId // Send original ID
+        });
         console.log("[usePeerActions] Message sent to", sanitizedToPeerId);
         dispatch(
           addMessage({

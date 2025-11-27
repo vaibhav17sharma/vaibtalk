@@ -129,12 +129,17 @@ export default function usePeerConnection(
           conn.peer,          
         );
         if (conn.peer === uniqueID) return;
+        
+        // Use the explicit senderId from payload if available, otherwise fallback to conn.peer
+        // This fixes the issue where sanitized IDs (user_name) don't match contact IDs (user.name)
+        const senderId = data?.senderId || conn.peer;
+
         if (data?.type === "file-metadata") {
           const transferId = data.transferId;
 
           dispatch(
             addMessage({
-              sender: conn.peer,
+              sender: senderId,
               receiver: uniqueID,
               content: {
                 transferId: data.transferId,
@@ -150,7 +155,7 @@ export default function usePeerConnection(
           dispatch(
             startFileTransfer({
               transferId,
-              peerId: conn.peer,
+              peerId: senderId,
               direction: "incoming",
               fileName: data.fileName,
               fileSize: data.fileSize,
@@ -159,7 +164,7 @@ export default function usePeerConnection(
           );
 
           peerManager.startFileTransfer(transferId, {
-            peerId: conn.peer,
+            peerId: senderId,
             direction: "incoming",
             fileName: data.fileName,
             fileSize: data.fileSize,
@@ -192,7 +197,7 @@ export default function usePeerConnection(
             dispatch(completeFileTransfer(data.transferId));
             dispatch(
               updateMessageByTransferId({
-                sender: conn.peer,
+                sender: senderId, // Use the stored peerId from transfer would be safer, but this works if consistent
                 receiver: uniqueID,
                 transferId: data.transferId,
                 updatedFields: {
@@ -208,10 +213,20 @@ export default function usePeerConnection(
               })
             );
           }
-        } else if (typeof data === "string") {
+        } else if (data?.type === "text") {
           dispatch(
             addMessage({
-              sender: conn.peer,
+              sender: senderId,
+              receiver: uniqueID,
+              content: data.content,
+              type: "text",
+            })
+          );
+        } else if (typeof data === "string") {
+          // Legacy support for plain string messages
+          dispatch(
+            addMessage({
+              sender: senderId,
               receiver: uniqueID,
               content: data,
               type: "text",
@@ -485,7 +500,13 @@ export default function usePeerConnection(
       console.log("[usePeerConnection] Connection peerConnection iceConnectionState:", conn?.peerConnection?.iceConnectionState);
       
       if (conn?.open) {
-        conn.send(message);
+        // Send object with metadata instead of plain string
+        conn.send({
+          type: "text",
+          content: message,
+          senderId: uniqueID // Send original ID (e.g. "user.name")
+        });
+        
         console.log("[usePeerConnection] Message sent to", sanitizedToPeerId);
         dispatch(
           addMessage({

@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAppDispatch } from "@/hooks/useRedux";
 import { setActiveContact } from "@/store/slice/peerSlice";
-import { MessageSquare, MoreVertical, UserMinus } from "lucide-react";
+import { MessageSquare, MoreVertical, UserMinus, Video } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -132,6 +132,24 @@ export default function ContactsList({ contacts }: ContactsListProps) {
                 className="h-8 w-8 rounded-full"
               >
                 <MessageSquare className="h-4 w-4" />
+              </Button>
+              <Button
+                onClick={() => {
+                  dispatch(
+                    setActiveContact({
+                      username: contact.username,
+                      name: contact.contactName,
+                      avatar: contact.avatar as string,
+                      type: "call",
+                    })
+                  );
+                  router.push("/call");
+                }}
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full"
+              >
+                <Video className="h-4 w-4" />
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

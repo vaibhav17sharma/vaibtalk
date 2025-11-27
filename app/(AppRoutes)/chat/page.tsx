@@ -51,11 +51,23 @@ export default function ChatPage() {
 
   const { session } = useSessionWithRedux();
   const { contacts } = useAppSelector((state) => state.contacts);
+  const { connectedPeers } = useAppSelector((state) => state.peer);
   const activeContact = useAppSelector((state) => state.peer.activeContact);
 
   const [activePeer, setActivePeer] = useState<any>(null);
   const currentUser = session?.user.uniqueID as string;
   let activePeerId = activePeer?.username as string;
+
+  const sanitizePeerId = (id: string) => {
+    if (!id) return "";
+    return id.replace(/[^a-zA-Z0-9_-]/g, "_");
+  };
+
+  const isPeerOnline = activePeerId
+    ? connectedPeers.includes(sanitizePeerId(activePeerId)) ||
+      activePeer?.online
+    : false;
+
   const [isInContacts, setIsInContacts] = useState(true);
 
   // Handle active contact from Redux or URL params (backward compatibility)
@@ -375,12 +387,10 @@ export default function ChatPage() {
                 <span
                   className={cn(
                     "w-2 h-2 rounded-full inline-block",
-                    connectionStatus == "connected"
-                      ? "bg-green-500"
-                      : "bg-gray-500"
+                    isPeerOnline ? "bg-green-500" : "bg-gray-500"
                   )}
                 ></span>
-                {connectionStatus == "connected" ? "Online" : "Offline"}
+                {isPeerOnline ? "Online" : "Offline"}
               </p>
             </div>
           </div>
