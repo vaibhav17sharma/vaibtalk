@@ -222,8 +222,17 @@ export default function usePeerConnection(
 
       conn.on("close", () => {
         console.log("[usePeerConnection] Connection closed with:", conn.peer);
-        peerManager.removeConnection(conn.peer);
-        dispatch(removeConnection(conn.peer));
+        
+        // Remove this specific connection from manager
+        peerManager.removeConnection(conn);
+        
+        // Only update Redux if NO connections remain for this peer
+        if (!peerManager.hasConnection(conn.peer)) {
+          console.log("[usePeerConnection] No remaining connections for", conn.peer, "- dispatching disconnect");
+          dispatch(removeConnection(conn.peer));
+        } else {
+          console.log("[usePeerConnection] Other connections still active for", conn.peer, "- keeping connected state");
+        }
       });
 
       conn.on("error", (err) => {

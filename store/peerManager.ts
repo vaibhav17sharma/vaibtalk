@@ -2,17 +2,9 @@ import Peer, { DataConnection, MediaConnection } from "peerjs";
 
 class PeerManager {
   private _peer: Peer | null = null;
-  private _connections: Map<string, DataConnection> = new Map();
+  private _connections: Map<string, DataConnection[]> = new Map();
   private _mediaConnections: Map<string, MediaConnection> = new Map();
   private _pendingCall: MediaConnection | null = null;
-
-  get pendingCall(): MediaConnection | null {
-    return this._pendingCall;
-  }
-
-  set pendingCall(call: MediaConnection | null) {
-    this._pendingCall = call;
-  }
 
   private _fileTransfers = new Map<
     string,
@@ -32,6 +24,14 @@ class PeerManager {
   set peer(newPeer: Peer | null) {
     this._peer = newPeer;
     console.log("[PeerManager] Peer instance set:", newPeer?.id);
+  }
+
+  get pendingCall(): MediaConnection | null {
+    return this._pendingCall;
+  }
+
+  set pendingCall(call: MediaConnection | null) {
+    this._pendingCall = call;
   }
 
   getTransfer(transferId: string) {
@@ -117,32 +117,77 @@ class PeerManager {
   }
 
   getConnection(peerId: string): DataConnection | undefined {
-    return this._connections.get(peerId);
+    const conns = this._connections.get(peerId);
+    if (!conns || conns.length === 0) return undefined;
+    
+    // Return the latest OPEN connection
+    for (let i = conns.length - 1; i >= 0; i--) {
+      if (conns[i].open) return conns[i];
+    }
+    
+    return conns[conns.length - 1];
   }
 
   addConnection(conn: DataConnection): void {
-    this._connections.set(conn.peer, conn);
-    console.log(
-      `[PeerManager] Added/Updated DataConnection for peer: ${conn.peer}`
-    );
+    const existing = this._connections.get(conn.peer) || [];
+    
+    // Avoid duplicates
+    if (!existing.includes(conn)) {
+      existing.push(conn);
+      this._connections.set(conn.peer, existing);
+      console.log(
+        `[PeerManager] Added connection for ${conn.peer}. Total connections: ${existing.length}`
+      );
+    }
   }
 
-  removeConnection(peerId: string): void {
-    const conn = this._connections.get(peerId);
-    if (conn && conn.open) {
-      console.log(`[PeerManager] Closing DataConnection for peer: ${peerId}`);
-      conn.close();
+  removeConnection(connOrId: string | DataConnection): void {
+    let peerId: string;
+    let connToRemove: DataConnection | undefined;
+
+    if (typeof connOrId === 'string') {
+      peerId = connOrId;
+    } else {
+      peerId = connOrId.peer;
+      connToRemove = connOrId;
     }
-    this._connections.delete(peerId);
-    console.log(`[PeerManager] Removed DataConnection for peer: ${peerId}`);
+
+    const conns = this._connections.get(peerId);
+    if (!conns) return;
+
+    if (connToRemove) {
+      // Remove specific connection
+      const newConns = conns.filter(c => c !== connToRemove);
+      if (newConns.length === 0) {
+        this._connections.delete(peerId);
+        console.log(`[PeerManager] All connections closed for ${peerId}`);
+      } else {
+        this._connections.set(peerId, newConns);
+        console.log(`[PeerManager] Removed one connection for ${peerId}. Remaining: ${newConns.length}`);
+      }
+      
+      // Close the specific connection if open
+      if (connToRemove.open) connToRemove.close();
+      
+    } else {
+      // Remove ALL connections for this peer (legacy behavior support)
+      conns.forEach(c => {
+        if (c.open) c.close();
+      });
+      this._connections.delete(peerId);
+      console.log(`[PeerManager] Removed ALL connections for ${peerId}`);
+    }
   }
 
   hasConnection(peerId: string): boolean {
-    return this._connections.has(peerId);
+    const conns = this._connections.get(peerId);
+    return !!conns && conns.some(c => c.open);
   }
 
   getAllConnections(): DataConnection[] {
-    return Array.from(this._connections.values());
+    const all: DataConnection[] = [];
+    this._connections.forEach(conns => all.push(...conns));
+    return all;
   }
 
   getMediaConnection(peerId: string): MediaConnection | undefined {
@@ -179,11 +224,11 @@ class PeerManager {
   }
 
   reset(): void {
-    this._connections.forEach((conn, peerId) => {
+    this._connections.forEach((conns, peerId) => {
       console.log(
-        `[PeerManager] Reset: Closing DataConnection for peer: ${peerId}`
+        `[PeerManager] Reset: Closing DataConnections for peer: ${peerId}`
       );
-      conn.close();
+      conns.forEach(c => c.close());
     });
     this._connections.clear();
 
