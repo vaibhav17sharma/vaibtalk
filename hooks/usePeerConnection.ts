@@ -68,12 +68,7 @@ export default function usePeerConnection(
 
   const setupConnection = useCallback(
     (conn: DataConnection) => {
-      console.log("[usePeerConnection] Setting up connection with:", conn.peer);
-      console.log("[usePeerConnection] Initial connection state:", {
-        open: conn.open,
-        connectionState: conn.peerConnection?.connectionState,
-        iceConnectionState: conn.peerConnection?.iceConnectionState
-      });
+
 
       peerManager.addConnection(conn);
       // Don't dispatch addConnection yet - wait for 'open' event
@@ -81,7 +76,7 @@ export default function usePeerConnection(
 
       // Check if connection is already open (race condition fix)
       if (conn.open) {
-        console.log("[usePeerConnection] Connection already open with:", conn.peer);
+
         dispatch(addConnection(conn.peer)); // Add to Redux only if open
         dispatch(setConnectionStatus("connected"));
         dispatch(clearMessageQueue(conn.peer));
@@ -89,37 +84,22 @@ export default function usePeerConnection(
 
       // Monitor ICE connection state for debugging
       if (conn.peerConnection) {
-        conn.peerConnection.addEventListener('iceconnectionstatechange', () => {
-          console.log(`[usePeerConnection] ICE connection state changed for ${conn.peer}:`, conn.peerConnection?.iceConnectionState);
-        });
-        conn.peerConnection.addEventListener('connectionstatechange', () => {
-          console.log(`[usePeerConnection] Connection state changed for ${conn.peer}:`, conn.peerConnection?.connectionState);
-        });
-        conn.peerConnection.addEventListener('icegatheringstatechange', () => {
-          console.log(`[usePeerConnection] ICE gathering state changed for ${conn.peer}:`, conn.peerConnection?.iceGatheringState);
-        });
-        conn.peerConnection.addEventListener('icecandidate', (event) => {
-          if (event.candidate) {
-            console.log(`[usePeerConnection] ICE candidate found for ${conn.peer}:`, event.candidate.type);
-          } else {
-            console.log(`[usePeerConnection] ICE candidate gathering complete for ${conn.peer}`);
-          }
-        });
+
       }
 
       conn.on("open", () => {
-        console.log("[usePeerConnection] Connection open event fired for:", conn.peer);
+
         dispatch(addConnection(conn.peer)); // Add to Redux now that it's open
         dispatch(setConnectionStatus("connected"));
         
         // Send any queued messages
         const queuedMessages = messageQueueRef.current[conn.peer] || [];
-        console.log(`[usePeerConnection] Sending ${queuedMessages.length} queued messages to ${conn.peer}`);
+
         
         queuedMessages.forEach((message: string) => {
           if (conn.open) {
             conn.send(message);
-            console.log("[usePeerConnection] Sent queued message to", conn.peer);
+
           }
         });
         
@@ -127,10 +107,7 @@ export default function usePeerConnection(
       });
 
       conn.on("data", async (data: any) => {
-        console.log(
-          "[usePeerConnection] Received data from",
-          conn.peer,          
-        );
+
         if (conn.peer === uniqueID) return;
         
         // Use the explicit senderId from payload if available, otherwise fallback to conn.peer
@@ -226,7 +203,7 @@ export default function usePeerConnection(
             })
           );
         } else if (data?.type === "END_CALL") {
-          console.log("[usePeerConnection] Received END_CALL from", senderId);
+
           peerManager.removeMediaConnection(senderId);
           dispatch(removeMediaConnection(senderId));
           dispatch(setActiveMediaType({ peerId: senderId, type: "none" }));
@@ -246,17 +223,15 @@ export default function usePeerConnection(
       });
 
       conn.on("close", () => {
-        console.log("[usePeerConnection] Connection closed with:", conn.peer);
+
         
         // Remove this specific connection from manager
         peerManager.removeConnection(conn);
         
         // Only update Redux if NO connections remain for this peer
         if (!peerManager.hasConnection(conn.peer)) {
-          console.log("[usePeerConnection] No remaining connections for", conn.peer, "- dispatching disconnect");
           dispatch(removeConnection(conn.peer));
         } else {
-          console.log("[usePeerConnection] Other connections still active for", conn.peer, "- keeping connected state");
         }
       });
 
@@ -270,10 +245,7 @@ export default function usePeerConnection(
 
   useEffect(() => {
     if (!peerManager.peer && uniqueID) {
-      console.log(
-        "[usePeerConnection] Creating Peer instance with ID:",
-        uniqueID
-      );
+
       const peerHost = process.env.NEXT_PUBLIC_PEER_SERVER_HOST;
       const host = (peerHost && peerHost !== "localhost") ? peerHost : window.location.hostname;
       const sanitizedId = sanitizePeerId(uniqueID);
@@ -291,7 +263,7 @@ export default function usePeerConnection(
       peerManager.peer = peer;
 
       peer.on("open", (id) => {
-        console.log("[usePeerConnection] Peer open with ID:", id);
+
         dispatch(setPeerId(id));
       });
 
@@ -300,20 +272,14 @@ export default function usePeerConnection(
       });
 
       peer.on("connection", (conn) => {
-        console.log("[usePeerConnection] Incoming connection from:", conn.peer);
+
         peerManager.addConnection(conn); // Always replace with the latest
         dispatch(addConnection(conn.peer));
         setupConnection(conn);
       });
 
       peer.on("call", (call) => {
-        console.log("[usePeerConnection] Incoming media call from:", call.peer);
         if (peerManager.hasMediaConnection(call.peer)) {
-          console.log(
-            "[usePeerConnection] Already have media connection with",
-            call.peer,
-            "- closing duplicate."
-          );
           call.close();
           return;
         }
@@ -321,11 +287,11 @@ export default function usePeerConnection(
         // Store the call and notify Redux
         peerManager.pendingCall = call;
         dispatch(setIncomingCall({ callerId: call.peer, type: "video" }));
-        console.log("[usePeerConnection] Incoming call stored, waiting for user acceptance");
+
         
         // Handle if the caller cancels before we answer
         call.on("close", () => {
-          console.log("[usePeerConnection] Incoming call cancelled by caller");
+
           if (peerManager.pendingCall === call) {
             peerManager.pendingCall = null;
             dispatch(setIncomingCall(null));
@@ -334,7 +300,7 @@ export default function usePeerConnection(
       });
 
       return () => {
-        console.log("[usePeerConnection] Cleaning up Peer instance");
+
         peerManager.reset();
       };
     }
@@ -348,13 +314,13 @@ export default function usePeerConnection(
         return;
       }
       if (peerManager.hasConnection(sanitizedTargetId)) {
-        console.log("[usePeerConnection] Already connected to", sanitizedTargetId);
+
         return;
       }
       
       // Check if peer exists on the server first
       try {
-        console.log("[usePeerConnection] Checking if peer exists:", sanitizedTargetId);
+
         const response = await fetch(
           `${peerManager.peer.options.secure ? 'https' : 'http'}://${peerManager.peer.options.host}:${peerManager.peer.options.port}${peerManager.peer.options.path}/peerjs/peers`,
           { method: 'GET' }
@@ -362,7 +328,7 @@ export default function usePeerConnection(
         
         if (response.ok) {
           const peers = await response.json();
-          console.log("[usePeerConnection] Available peers:", peers);
+
           
           if (!peers.includes(sanitizedTargetId)) {
             console.error(
@@ -372,7 +338,7 @@ export default function usePeerConnection(
             dispatch(setConnectionStatus("disconnected"));
             // Still attempt connection in case the API is outdated
           } else {
-            console.log(`[usePeerConnection] ✓ Peer ${sanitizedTargetId} is online`);
+
           }
         }
       } catch (error) {
@@ -381,7 +347,7 @@ export default function usePeerConnection(
       }
       
       dispatch(setConnectionStatus("connecting"));
-      console.log("[usePeerConnection] Connecting to peer:", sanitizedTargetId);
+
       
       const conn = peerManager.peer.connect(sanitizedTargetId, {
         reliable: true,
@@ -417,7 +383,7 @@ export default function usePeerConnection(
   const disconnect = useCallback(
     (targetId: string) => {
       const sanitizedTargetId = sanitizePeerId(targetId);
-      console.log("[usePeerConnection] Disconnecting from peer:", sanitizedTargetId);
+
       peerManager.removeConnection(sanitizedTargetId);
       dispatch(removeConnection(sanitizedTargetId));
       endMedia(sanitizedTargetId);
@@ -458,15 +424,12 @@ export default function usePeerConnection(
         mediaCallbacksRef.current?.onMediaChange?.(sanitizedTargetId, mediaType);
 
         call.on("stream", (remoteStream) => {
-          console.log(
-            "[usePeerConnection] Received remote stream from:",
-            sanitizedTargetId
-          );
+
           mediaCallbacksRef.current?.onStream?.(sanitizedTargetId, remoteStream);
         });
 
         call.on("close", () => {
-          console.log("[usePeerConnection] Media call closed with:", sanitizedTargetId);
+
           peerManager.removeMediaConnection(sanitizedTargetId);
           dispatch(removeMediaConnection(sanitizedTargetId));
           mediaCallbacksRef.current?.onMediaChange?.(sanitizedTargetId, "none");
@@ -484,7 +447,7 @@ export default function usePeerConnection(
   const endMedia = useCallback(
     (targetId: string) => {
       const sanitizedTargetId = sanitizePeerId(targetId);
-      console.log("[usePeerConnection] Ending media with:", sanitizedTargetId);
+
       peerManager.removeMediaConnection(sanitizedTargetId);
       dispatch(removeMediaConnection(sanitizedTargetId));
       mediaCallbacksRef.current?.onMediaChange?.(sanitizedTargetId, "none");
@@ -503,11 +466,7 @@ export default function usePeerConnection(
     (message: string, toPeerId: string) => {
       const sanitizedToPeerId = sanitizePeerId(toPeerId);
       const conn = peerManager.getConnection(sanitizedToPeerId);
-      console.log("[usePeerConnection] sendMessage", message, "to", sanitizedToPeerId);
-      console.log("[usePeerConnection] Connection exists:", !!conn);
-      console.log("[usePeerConnection] Connection open:", conn?.open);
-      console.log("[usePeerConnection] Connection peerConnection state:", conn?.peerConnection?.connectionState);
-      console.log("[usePeerConnection] Connection peerConnection iceConnectionState:", conn?.peerConnection?.iceConnectionState);
+
       
       if (conn?.open) {
         // Send object with metadata instead of plain string
@@ -517,7 +476,7 @@ export default function usePeerConnection(
           senderId: uniqueID // Send original ID (e.g. "user.name")
         });
         
-        console.log("[usePeerConnection] Message sent to", sanitizedToPeerId);
+
         dispatch(
           addMessage({
             sender: uniqueID, // Keep original ID for chat logic/display
@@ -527,17 +486,7 @@ export default function usePeerConnection(
           })
         );
       } else {
-        console.warn(
-          "[usePeerConnection] Connection not open, queueing message for",
-          sanitizedToPeerId
-        );
-        console.warn("[usePeerConnection] Connection state details:", {
-          exists: !!conn,
-          open: conn?.open,
-          peer: conn?.peer,
-          connectionState: conn?.peerConnection?.connectionState,
-          iceConnectionState: conn?.peerConnection?.iceConnectionState
-        });
+
         dispatch(enqueueMessage({ toPeerId: sanitizedToPeerId, message }));
       }
     },

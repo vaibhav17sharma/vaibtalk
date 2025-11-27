@@ -24,7 +24,6 @@ class PeerManager {
 
   set peer(newPeer: Peer | null) {
     this._peer = newPeer;
-    console.log("[PeerManager] Peer instance set:", newPeer?.id);
   }
 
   get pendingCall(): MediaConnection | null {
@@ -136,9 +135,6 @@ class PeerManager {
     if (!existing.includes(conn)) {
       existing.push(conn);
       this._connections.set(conn.peer, existing);
-      console.log(
-        `[PeerManager] Added connection for ${conn.peer}. Total connections: ${existing.length}`
-      );
     }
   }
 
@@ -161,10 +157,8 @@ class PeerManager {
       const newConns = conns.filter(c => c !== connToRemove);
       if (newConns.length === 0) {
         this._connections.delete(peerId);
-        console.log(`[PeerManager] All connections closed for ${peerId}`);
       } else {
         this._connections.set(peerId, newConns);
-        console.log(`[PeerManager] Removed one connection for ${peerId}. Remaining: ${newConns.length}`);
       }
       
       // Close the specific connection if open
@@ -176,7 +170,6 @@ class PeerManager {
         if (c.open) c.close();
       });
       this._connections.delete(peerId);
-      console.log(`[PeerManager] Removed ALL connections for ${peerId}`);
     }
   }
 
@@ -198,28 +191,20 @@ class PeerManager {
   addMediaConnection(call: MediaConnection): void {
     if (!this._mediaConnections.has(call.peer)) {
       this._mediaConnections.set(call.peer, call);
-      console.log(`[PeerManager] Added MediaConnection for peer: ${call.peer}`);
-    } else {
-      console.log(
-        `[PeerManager] MediaConnection for peer ${call.peer} already exists`
-      );
     }
   }
 
   removeMediaConnection(peerId: string): void {
     const call = this._mediaConnections.get(peerId);
     if (call) {
-      console.log(`[PeerManager] Closing MediaConnection for peer: ${peerId}`);
       call.close();
     }
     this._mediaConnections.delete(peerId);
     this._remoteStreams.delete(peerId);
-    console.log(`[PeerManager] Removed MediaConnection for peer: ${peerId}`);
   }
 
   setRemoteStream(peerId: string, stream: MediaStream): void {
     this._remoteStreams.set(peerId, stream);
-    console.log(`[PeerManager] Stored remote stream for peer: ${peerId}`);
   }
 
   getRemoteStream(peerId: string): MediaStream | undefined {
@@ -235,25 +220,18 @@ class PeerManager {
   }
 
   reset(): void {
-    this._connections.forEach((conns, peerId) => {
-      console.log(
-        `[PeerManager] Reset: Closing DataConnections for peer: ${peerId}`
-      );
+    this._connections.forEach((conns) => {
       conns.forEach(c => c.close());
     });
     this._connections.clear();
 
-    this._mediaConnections.forEach((call, peerId) => {
-      console.log(
-        `[PeerManager] Reset: Closing MediaConnection for peer: ${peerId}`
-      );
+    this._mediaConnections.forEach((call) => {
       call.close();
     });
     this._mediaConnections.clear();
     this._remoteStreams.clear();
 
     if (this._peer) {
-      console.log("[PeerManager] Reset: Destroying Peer instance");
       this._peer.destroy();
       this._peer = null;
     }
