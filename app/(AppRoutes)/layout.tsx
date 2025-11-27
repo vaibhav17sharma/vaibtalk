@@ -1,5 +1,6 @@
 "use client";
 
+import PeerProvider from "@/components/providers/PeerProvider";
 import { useSessionSync } from "@/hooks/useSessionSync";
 import React, { useEffect, useState } from "react";
 
@@ -16,6 +17,7 @@ export default (props: Props) => {
       setNavbarHeight(navbar.offsetHeight);
     }
   }, []);
+  
   return (
     <div
       className="w-full"
@@ -24,8 +26,10 @@ export default (props: Props) => {
         marginTop: `${navbarHeight}px`,
       }}
     >
-      <div className="w-full bg-black/90">{props.children}</div>
-      <SessionInitializer />
+      <PeerProvider>
+        <div className="w-full bg-black/90">{props.children}</div>
+        <SessionInitializer />
+      </PeerProvider>
     </div>
   );
 };
