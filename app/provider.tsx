@@ -1,5 +1,6 @@
 "use client";
 import { ThemeProvider } from "@/components/common/ThemeProvider";
+import { SocketProvider } from "@/components/providers/SocketProvider";
 import store from "@/store/store";
 import { SessionProvider } from "next-auth/react";
 import { ReactNode } from "react";
@@ -15,7 +16,9 @@ export const Providers = ({ children }: { children: ReactNode }) => {
         disableTransitionOnChange
       >
         <SessionProvider>
-          <Provider store={store}>{children}</Provider>
+          <Provider store={store}>
+            <SocketProvider>{children}</SocketProvider>
+          </Provider>
         </SessionProvider>
       </ThemeProvider>
     </>

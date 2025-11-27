@@ -17,15 +17,16 @@ import ImagePreview from "./ImagePreview";
 type Message = {
   id: string;
   content:
-  | string
-  | {
-    size: number | string;
-    url?: string;
-    name: string;
-    type: string;
-    transferId?: string;
-  };
+    | string
+    | {
+        size: number | string;
+        url?: string;
+        name: string;
+        type: string;
+        transferId?: string;
+      };
   sender: string;
+  senderName?: string;
   timestamp: Date;
   isMe: boolean;
   type: "text" | "file" | "voice";
@@ -223,8 +224,8 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           </div>
           {(fileTransfer?.status === "active" ||
             fileTransfer?.status === "pending") && (
-              <Progress value={fileTransfer?.progress} />
-            )}
+            <Progress value={fileTransfer?.progress} />
+          )}
           {fileTransfer?.status === "cancelled" && <Ban className="w-5 h-5" />}
           {(fileTransfer?.status === "completed" || url) && (
             <button
@@ -269,6 +270,11 @@ export default function ChatMessage({ message }: ChatMessageProps) {
               : "self-start bg-muted/20 border-border"
           )}
         >
+          {!message.isMe && message.senderName && (
+            <p className="text-xs text-muted-foreground mb-1 ml-1 font-medium text-purple-400">
+              {message.senderName}
+            </p>
+          )}
           {message.type === "text" ? (
             <p className="text-sm min-w-10 pb-2">{message.content as string}</p>
           ) : (
@@ -281,7 +287,6 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           </span>
         </Card>
       </div>
-
     </div>
   );
 }

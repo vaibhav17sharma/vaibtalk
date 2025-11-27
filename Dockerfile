@@ -52,12 +52,16 @@ RUN adduser --system --uid 1001 nextjs
 
 # Copy necessary files from builder
 # Copy necessary files from builder
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
+
+# Copy standalone build FIRST (includes minimal node_modules and server.js)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+
+# Install production dependencies (ensures http-proxy and others are present)
+RUN pnpm install --prod --frozen-lockfile
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.pnpm ./node_modules/.pnpm
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder --chown=nextjs:nodejs /app/lib/generated ./lib/generated
 
 USER nextjs
@@ -67,5 +71,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Start the application
+# Start the application (server.js is compiled from server.ts)
 CMD ["node", "server.js"]

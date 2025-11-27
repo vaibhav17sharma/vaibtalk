@@ -4,7 +4,8 @@ services:
     image: peerjs/peerjs-server:latest
     container_name: vaibtalk-peerjs
     restart: unless-stopped
-    # Ports not exposed to host, accessed via Next.js rewrite
+    # ports:
+    #   - "9000:9000" # Not needed, we proxy through Next.js
     environment:
       - PORT=9000
       - PEERJS_PATH=/peerjs
@@ -49,7 +50,7 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       # PeerJS configuration for client-side
       - NEXT_PUBLIC_PEER_SERVER_HOST=${NEXT_PUBLIC_PEER_SERVER_HOST:-localhost}
-      - NEXT_PUBLIC_PEER_SERVER_PORT=${NEXT_PUBLIC_PEER_SERVER_PORT:-9000}
+      - NEXT_PUBLIC_PEER_SERVER_PORT=${NEXT_PUBLIC_PEER_SERVER_PORT:-3000}
       - NEXT_PUBLIC_PEER_SERVER_PATH=${NEXT_PUBLIC_PEER_SERVER_PATH:-/peerjs}
       - NEXT_PUBLIC_PEER_SERVER_SECURE=${NEXT_PUBLIC_PEER_SERVER_SECURE:-false}
     depends_on:

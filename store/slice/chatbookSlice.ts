@@ -18,7 +18,9 @@ export interface Message {
   id: string;
   content: MessageContent;
   sender: string; // username/peerId
-  receiver: string; // username/peerId
+  receiver?: string; // username/peerId
+  groupId?: string;
+  senderName?: string; // For group chat display
   timestamp: string; // ISO string
   type: "text" | "file";
 }
@@ -27,8 +29,10 @@ export interface MessagesState {
   conversations: Record<string, Message[]>;
 }
 
-const getConversationKey = (peerA: string, peerB: string) =>
-  [peerA, peerB].sort().join("|");
+const getConversationKey = (peerA: string, peerB: string, groupId?: string) => {
+  if (groupId) return groupId;
+  return [peerA, peerB].sort().join("|");
+};
 
 const initialState: MessagesState = {
   conversations: {},
@@ -38,12 +42,30 @@ const messagesSlice = createSlice({
   name: "chatbook",
   initialState,
   reducers: {
+    setMessages: {
+      reducer(state, action: PayloadAction<{ messages: Message[]; currentUser: string; peerId: string; groupId?: string }>) {
+        const { messages, currentUser, peerId, groupId } = action.payload;
+        const key = getConversationKey(currentUser, peerId, groupId);
+        state.conversations[key] = messages;
+      },
+      prepare(messages: Message[], currentUser: string, peerId: string, groupId?: string) {
+        return { payload: { messages, currentUser, peerId, groupId } };
+      }
+    },
     addMessage: {
       reducer(state, action: PayloadAction<Message>) {
-        const { sender, receiver } = action.payload;
-        const key = getConversationKey(sender, receiver);
+        const { sender, receiver, groupId } = action.payload;
+        // If it's a group message, key is groupId.
+        // If 1:1, key is sorted(sender, receiver).
+        // receiver might be undefined for group message if we follow my schema, but here we need a second arg for getConversationKey if not group.
+        // If groupId is present, use it.
+        // If not, use sender and receiver.
+        const key = getConversationKey(sender, receiver || "", groupId);
         const existing = state.conversations[key] || [];
-        state.conversations[key] = [...existing, action.payload];
+        // Avoid duplicates if message with same ID exists
+        if (!existing.find(m => m.id === action.payload.id)) {
+          state.conversations[key] = [...existing, action.payload];
+        }
       },
       prepare(payload: Omit<Message, "id" | "timestamp">) {
         return {
@@ -55,13 +77,27 @@ const messagesSlice = createSlice({
         };
       },
     },
+    receiveMessage: {
+      reducer(state, action: PayloadAction<Message>) {
+        const { sender, receiver, groupId } = action.payload;
+        const key = getConversationKey(sender, receiver || "", groupId);
+        const existing = state.conversations[key] || [];
+        if (!existing.find(m => m.id === action.payload.id)) {
+          state.conversations[key] = [...existing, action.payload];
+        }
+      },
+      prepare(payload: Message) {
+        return { payload };
+      }
+    },
     clearConversation(
       state,
-      action: PayloadAction<{ peerA: string; peerB: string }>
+      action: PayloadAction<{ peerA: string; peerB: string; groupId?: string }>
     ) {
       const key = getConversationKey(
         action.payload.peerA,
-        action.payload.peerB
+        action.payload.peerB,
+        action.payload.groupId
       );
       delete state.conversations[key];
     },
@@ -73,12 +109,13 @@ const messagesSlice = createSlice({
       action: PayloadAction<{
         sender: string;
         receiver: string;
+        groupId?: string;
         transferId: string;
         updatedFields: Partial<Message>;
       }>
     ) {
-      const { sender, receiver, transferId, updatedFields } = action.payload;
-      const key = getConversationKey(sender, receiver);
+      const { sender, receiver, groupId, transferId, updatedFields } = action.payload;
+      const key = getConversationKey(sender, receiver, groupId);
       const conversation = state.conversations[key];
 
       if (!conversation) return;
@@ -115,11 +152,11 @@ const messagesSlice = createSlice({
   },
 });
 
-export const makeSelectMessages = (currentUser: string, activePeer: string) =>
+export const makeSelectMessages = (currentUser: string, activePeer: string, isGroup: boolean = false) =>
   createSelector(
     (state: { chatbook: MessagesState }) => state.chatbook.conversations,
     (conversations: any): Message[] => {
-      const key = getConversationKey(currentUser, activePeer);
+      const key = getConversationKey(currentUser, activePeer, isGroup ? activePeer : undefined);
       return conversations[key] || [];
     }
   );
@@ -127,6 +164,8 @@ export const makeSelectMessages = (currentUser: string, activePeer: string) =>
 
 export const {
   addMessage,
+  setMessages,
+  receiveMessage,
   clearConversation,
   clearAllMessages,
   updateMessageByTransferId,

@@ -1,5 +1,6 @@
 "use client";
 
+import CreateGroupDialog from "@/components/chat/CreateGroupDialog";
 import EnhancedAddContactDialog from "@/components/dashboard/EnhancedAddContactDialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ export default function ContactsPage() {
   const dispatch = useAppDispatch();
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddContact, setShowAddContact] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
   const router = useRouter();
 
   const filteredContacts = contacts.filter((contact) =>
@@ -81,12 +83,21 @@ export default function ContactsPage() {
                   </p>
                 </div>
               </div>
-              <Button
-                onClick={() => setShowAddContact(true)}
-                className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600"
-              >
-                <Plus className="w-4 h-4 mr-2" /> Add Contact
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setShowCreateGroup(true)}
+                  variant="outline"
+                  className="border-purple-500/50 hover:bg-purple-500/10"
+                >
+                  <Users className="w-4 h-4 mr-2" /> Create Group
+                </Button>
+                <Button
+                  onClick={() => setShowAddContact(true)}
+                  className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600"
+                >
+                  <Plus className="w-4 h-4 mr-2" /> Add Contact
+                </Button>
+              </div>
             </div>
 
             <div className="relative mb-6">
@@ -169,6 +180,11 @@ export default function ContactsPage() {
       <EnhancedAddContactDialog
         isOpen={showAddContact}
         onClose={() => setShowAddContact(false)}
+        onSuccess={handleContactSuccess}
+      />
+      <CreateGroupDialog
+        isOpen={showCreateGroup}
+        onClose={() => setShowCreateGroup(false)}
         onSuccess={handleContactSuccess}
       />
     </div>

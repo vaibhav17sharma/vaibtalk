@@ -12,7 +12,7 @@ export interface PeerState {
     username: string;
     name?: string;
     avatar?: string;
-    type: "chat" | "call" | null;
+    type: "chat" | "call" | "group" | null;
   } | null;
   incomingCall: {
     callerId: string;
@@ -110,7 +110,7 @@ const peerSlice = createSlice({
         username: string;
         name?: string;
         avatar?: string;
-        type: "chat" | "call";
+        type: "chat" | "call" | "group";
       }>
     ) {
       state.activeContact = { ...action.payload, type: action.payload.type };

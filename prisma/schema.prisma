@@ -28,6 +28,7 @@ model User {
   sentRequests     ContactRequest[] @relation("SentRequests")
   receivedRequests ContactRequest[] @relation("ReceivedRequests")
   invitesCreated   InviteCode[]     @relation("InvitesCreated")
+  groupMembers     GroupMember[]
 
   @@index([username])
 }
@@ -73,18 +74,21 @@ model Message {
   fileName     String?
   fileSize     Int?
   senderId     String
-  receiverId   String
+  receiverId   String?
+  groupId      String?
   senderName   String
-  receiverName String
+  receiverName String?
   read         Boolean  @default(false)
   createdAt    DateTime @default(now())
   expiresAt    DateTime @default(dbgenerated("NOW() + interval '3 hours'"))
 
-  sender   User @relation("SenderMessages", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver User @relation("ReceiverMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender   User   @relation("SenderMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User?  @relation("ReceiverMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  group    Group? @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@index([senderId])
   @@index([receiverId])
+  @@index([groupId])
   @@index([senderName])
   @@index([receiverName])
   @@index([expiresAt])
@@ -122,4 +126,31 @@ model InviteCode {
   @@index([code])
   @@index([inviterId])
   @@index([used])
+}
+
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  avatar      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members  GroupMember[]
+  messages Message[]
+}
+
+model GroupMember {
+  id       String   @id @default(uuid())
+  userId   String
+  groupId  String
+  role     String   @default("MEMBER") // ADMIN, MEMBER
+  joinedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([userId])
+  @@index([groupId])
 }

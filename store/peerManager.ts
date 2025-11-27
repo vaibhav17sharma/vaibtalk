@@ -4,6 +4,7 @@ class PeerManager {
   private _peer: Peer | null = null;
   private _connections: Map<string, DataConnection[]> = new Map();
   private _mediaConnections: Map<string, MediaConnection> = new Map();
+  private _remoteStreams: Map<string, MediaStream> = new Map();
   private _pendingCall: MediaConnection | null = null;
 
   private _fileTransfers = new Map<
@@ -212,7 +213,17 @@ class PeerManager {
       call.close();
     }
     this._mediaConnections.delete(peerId);
+    this._remoteStreams.delete(peerId);
     console.log(`[PeerManager] Removed MediaConnection for peer: ${peerId}`);
+  }
+
+  setRemoteStream(peerId: string, stream: MediaStream): void {
+    this._remoteStreams.set(peerId, stream);
+    console.log(`[PeerManager] Stored remote stream for peer: ${peerId}`);
+  }
+
+  getRemoteStream(peerId: string): MediaStream | undefined {
+    return this._remoteStreams.get(peerId);
   }
 
   hasMediaConnection(peerId: string): boolean {
@@ -239,6 +250,7 @@ class PeerManager {
       call.close();
     });
     this._mediaConnections.clear();
+    this._remoteStreams.clear();
 
     if (this._peer) {
       console.log("[PeerManager] Reset: Destroying Peer instance");

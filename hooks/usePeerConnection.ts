@@ -76,11 +76,13 @@ export default function usePeerConnection(
       });
 
       peerManager.addConnection(conn);
-      dispatch(addConnection(conn.peer));
+      // Don't dispatch addConnection yet - wait for 'open' event
+      // dispatch(addConnection(conn.peer)); 
 
       // Check if connection is already open (race condition fix)
       if (conn.open) {
         console.log("[usePeerConnection] Connection already open with:", conn.peer);
+        dispatch(addConnection(conn.peer)); // Add to Redux only if open
         dispatch(setConnectionStatus("connected"));
         dispatch(clearMessageQueue(conn.peer));
       }
@@ -107,6 +109,7 @@ export default function usePeerConnection(
 
       conn.on("open", () => {
         console.log("[usePeerConnection] Connection open event fired for:", conn.peer);
+        dispatch(addConnection(conn.peer)); // Add to Redux now that it's open
         dispatch(setConnectionStatus("connected"));
         
         // Send any queued messages
@@ -222,6 +225,13 @@ export default function usePeerConnection(
               type: "text",
             })
           );
+        } else if (data?.type === "END_CALL") {
+          console.log("[usePeerConnection] Received END_CALL from", senderId);
+          peerManager.removeMediaConnection(senderId);
+          dispatch(removeMediaConnection(senderId));
+          dispatch(setActiveMediaType({ peerId: senderId, type: "none" }));
+          // Optionally redirect if on call page? 
+          // The UI should react to activeMediaType change.
         } else if (typeof data === "string") {
           // Legacy support for plain string messages
           dispatch(
@@ -270,7 +280,7 @@ export default function usePeerConnection(
       
       const peer = new Peer(sanitizedId, {
         host: host,
-        port: Number(process.env.NEXT_PUBLIC_PEER_SERVER_PORT) || 9000,
+        port: Number(process.env.NEXT_PUBLIC_PEER_SERVER_PORT) || 3000,
         path: process.env.NEXT_PUBLIC_PEER_SERVER_PATH || "/peerjs",
         secure: process.env.NEXT_PUBLIC_PEER_SERVER_SECURE === "true",
         config: {

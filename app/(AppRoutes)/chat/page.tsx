@@ -3,6 +3,7 @@
 import CameraCaptureDialog from "@/components/chat/CameraCapture";
 import ChatMessage from "@/components/chat/ChatMessage";
 import FileUploadModal from "@/components/chat/FileUploadModal";
+import { useSocket } from "@/components/providers/SocketProvider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +11,16 @@ import { usePeerActions } from "@/hooks/usePeerActions";
 import { useAppDispatch, useAppSelector } from "@/hooks/useRedux";
 import { useSessionWithRedux } from "@/hooks/useSessionWithRedux";
 import { cn } from "@/lib/utils";
-import { makeSelectMessages } from "@/store/slice/chatbookSlice";
-import { clearActiveContact, setActiveContact } from "@/store/slice/peerSlice";
+import {
+  makeSelectMessages,
+  receiveMessage,
+  setMessages,
+} from "@/store/slice/chatbookSlice";
+import {
+  clearActiveContact,
+  setActiveContact,
+  setActiveMediaType,
+} from "@/store/slice/peerSlice";
 import EmojiPicker from "emoji-picker-react";
 import {
   AlertTriangle,
@@ -153,11 +162,86 @@ export default function ChatPage() {
   const [showMediaOptions, setShowMediaOptions] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
+  const { socket } = useSocket();
+
   const selectMessages = useMemo(
-    () => makeSelectMessages(currentUser, activePeerId),
-    [currentUser, activePeerId]
+    () =>
+      makeSelectMessages(
+        currentUser,
+        activePeerId,
+        activePeer?.type === "group"
+      ),
+    [currentUser, activePeerId, activePeer?.type]
   );
   const messages = useAppSelector(selectMessages);
+
+  // Fetch messages on activePeer change
+  useEffect(() => {
+    if (!activePeerId || !currentUser) return;
+
+    const fetchMessages = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (activePeer?.type === "group") {
+          params.append("groupId", activePeerId);
+        } else {
+          params.append("peerId", activePeerId);
+        }
+
+        const res = await fetch(`/api/messages?${params.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          dispatch(
+            setMessages(
+              data,
+              currentUser,
+              activePeerId,
+              activePeer?.type === "group" ? activePeerId : undefined
+            )
+          );
+        }
+      } catch (error) {
+        console.error("Failed to fetch messages", error);
+      }
+    };
+
+    fetchMessages();
+  }, [activePeerId, currentUser, activePeer?.type, dispatch]);
+
+  // Listen for new messages via Socket
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewMessage = (message: any) => {
+      // Check if message belongs to current conversation
+      const isRelevant =
+        (activePeer?.type === "group" && message.groupId === activePeerId) ||
+        (!message.groupId &&
+          (message.senderId === activePeerId ||
+            message.senderId === currentUser));
+
+      if (isRelevant) {
+        dispatch(
+          receiveMessage({
+            id: message.id,
+            content: message.content,
+            sender: message.senderId,
+            receiver: message.receiverId,
+            groupId: message.groupId,
+            senderName: message.senderName,
+            timestamp: message.createdAt,
+            type: message.type,
+          })
+        );
+      }
+    };
+
+    socket.on("new_message", handleNewMessage);
+
+    return () => {
+      socket.off("new_message", handleNewMessage);
+    };
+  }, [socket, activePeerId, activePeer?.type, currentUser, dispatch]);
 
   // Scroll to bottom on new message
   useEffect(() => {
@@ -220,7 +304,14 @@ export default function ChatPage() {
 
   const handleConnect = () => {
     if (activePeer?.username) {
-      connect(activePeer.username);
+      // Start video call flow
+      dispatch(
+        setActiveMediaType({
+          peerId: activePeer.username,
+          type: "video",
+        })
+      );
+      router.push("/call");
     }
   };
   const handleBack = () => {
@@ -228,9 +319,52 @@ export default function ChatPage() {
   };
 
   const handleSendMessage = () => {
-    if (!messageInput.trim() || !activePeer || !isInContacts) return;
-    sendPeerMessage(messageInput, activePeer.username, currentUser);
-    setMessageInput("");
+    if (!messageInput.trim() || !activePeer) return;
+
+    const messageContent = messageInput;
+    setMessageInput(""); // Optimistic clear
+
+    // 1. Try P2P First for 1:1 Chat
+    if (activePeer.type !== "group") {
+      // Check if we have a direct connection
+      // We can use sendPeerMessage which handles the connection check internally
+      // But we want to know if it failed so we can fallback
+
+      // Let's try to send via PeerJS
+      // usePeerActions.sendMessage checks if conn is open.
+      // We need to know if it succeeded.
+      // The current hook doesn't return success/fail, so let's check connection status directly here or modify hook.
+      // For now, let's check if we are connected to this peer.
+
+      const isP2PConnected = connectedPeers.includes(
+        sanitizePeerId(activePeer.username)
+      );
+
+      if (isP2PConnected) {
+        console.log("Sending via P2P to", activePeer.username);
+        sendPeerMessage(messageContent, activePeer.username, currentUser);
+        return;
+      }
+    }
+
+    // 2. Fallback to Server (Socket.io) or Group Chat
+    // If P2P failed or it's a group chat, use Socket.io
+    if (socket && socket.connected) {
+      console.log("Sending via Socket.io (Fallback/Group)");
+      const messageData = {
+        content: messageContent,
+        senderId: currentUser,
+        senderName: session?.user.name,
+        receiverId:
+          activePeer.type === "group" ? undefined : activePeer.username,
+        groupId: activePeer.type === "group" ? activePeer.username : undefined,
+        type: "text",
+      };
+
+      socket.emit("send_message", messageData);
+    } else {
+      toast.error("Not connected to server or peer");
+    }
   };
 
   const handleVoiceUpload = async (file: File) => {
@@ -405,9 +539,11 @@ export default function ChatPage() {
                 <UserPlus className="w-3 h-3" /> Add Contact
               </Button>
             )}
-            <Button variant="ghost" size="icon" onClick={handleConnect}>
-              <VideoIcon className="w-5 h-5" />
-            </Button>
+            {activePeer?.type !== "group" && (
+              <Button variant="ghost" size="icon" onClick={handleConnect}>
+                <VideoIcon className="w-5 h-5" />
+              </Button>
+            )}
           </div>
         </div>
 
@@ -440,6 +576,7 @@ export default function ChatPage() {
                 message={{
                   ...message,
                   isMe: message.sender === currentUser,
+                  senderName: message.senderName,
                   timestamp: new Date(message.timestamp),
                 }}
               />
