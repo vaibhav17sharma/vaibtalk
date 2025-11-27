@@ -56,11 +56,14 @@ export default function usePeerConnection(
   );
 
   const localMediaStreamRef = useRef<MediaStream | null>(null);
+  const messageQueueRef = useRef(messageQueue);
 
+  // Update refs when values change
   const mediaCallbacksRef = useRef<MediaCallbacks | undefined>(mediaCallbacks);
   useEffect(() => {
     mediaCallbacksRef.current = mediaCallbacks;
-  }, [mediaCallbacks]);
+    messageQueueRef.current = messageQueue;
+  }, [mediaCallbacks, messageQueue]);
 
   const setupConnection = useCallback(
     (conn: DataConnection) => {
@@ -96,7 +99,7 @@ export default function usePeerConnection(
         dispatch(setConnectionStatus("connected"));
         
         // Send any queued messages
-        const queuedMessages = messageQueue[conn.peer] || [];
+        const queuedMessages = messageQueueRef.current[conn.peer] || [];
         console.log(`[usePeerConnection] Sending ${queuedMessages.length} queued messages to ${conn.peer}`);
         
         queuedMessages.forEach((message: string) => {
@@ -217,7 +220,7 @@ export default function usePeerConnection(
         dispatch(setConnectionStatus("disconnected"));
       });
     },
-    [dispatch, uniqueID, messageQueue]
+    [dispatch, uniqueID]
   );
 
   useEffect(() => {
