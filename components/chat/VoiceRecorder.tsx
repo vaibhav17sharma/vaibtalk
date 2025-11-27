@@ -11,73 +11,58 @@ type VoiceRecorderProps = {
   onCancel?: () => void;
 };
 
-export default function VoiceRecorder({ onUpload, onCancel }: VoiceRecorderProps) {
+export default function VoiceRecorder({
+  onUpload,
+  onCancel,
+}: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [didStopRecording, setDidStopRecording] = useState(false);
 
-  const {
-    startRecording,
-    stopRecording,
-    clearBlobUrl,
-    mediaBlobUrl,
-  } = useReactMediaRecorder({
-    audio: true,
-    video: false,
-    blobPropertyBag: { type: "audio/webm" },
-    onStop: (blobUrl, blob) => {
-    console.log("[VoiceRecorder] onStop fired!");
-    console.log("👉 blobUrl:", blobUrl);
-    console.log("👉 blob:", blob);
-  }
-  });
+  const { startRecording, stopRecording, clearBlobUrl, mediaBlobUrl } =
+    useReactMediaRecorder({
+      audio: true,
+      video: false,
+      blobPropertyBag: { type: "audio/webm" },
+      onStop: (blobUrl, blob) => {},
+    });
 
   useEffect(() => {
     const init = async () => {
       try {
-        console.log("[VoiceRecorder] Starting recording...");
         await startRecording();
         setIsRecording(true);
       } catch (err) {
         toast.error("Failed to start recording");
-        console.error("[VoiceRecorder] Error starting recording:", err);
       }
     };
     init();
 
     return () => {
-      console.log("[VoiceRecorder] Cleaning up recording...");
       stopRecording();
       clearBlobUrl();
     };
   }, []);
 
   useEffect(() => {
-    console.log("[VoiceRecorder] mediaBlobUrl updated:", mediaBlobUrl);
-    console.log("[VoiceRecorder] isRecording:", isRecording);
-    console.log("[VoiceRecorder] didStopRecording:", didStopRecording);
-
     if (mediaBlobUrl && didStopRecording) {
-      console.log("[VoiceRecorder] Processing recorded media...");
       fetch(mediaBlobUrl)
         .then((res) => res.blob())
         .then((blob) => {
           const file = new File([blob], generateAudioFileName(), {
             type: "audio/webm",
           });
-          console.log("[VoiceRecorder] Uploading audio file:", file);
+
           onUpload(file);
           clearBlobUrl();
           setDidStopRecording(false); // Reset flag
         })
         .catch((err) => {
           toast.error("Failed to process recording");
-          console.error("[VoiceRecorder] Error processing blob:", err);
         });
     }
   }, [mediaBlobUrl, didStopRecording]);
 
   const handleCancel = async () => {
-    console.log("[VoiceRecorder] Cancel clicked");
     await stopRecording();
     await clearBlobUrl();
     setIsRecording(false);
@@ -86,14 +71,12 @@ export default function VoiceRecorder({ onUpload, onCancel }: VoiceRecorderProps
   };
 
   const handleDone = async () => {
-    console.log("[VoiceRecorder] Done clicked - stopping recording...");
     await stopRecording();
     setIsRecording(false);
     setDidStopRecording(true);
   };
 
   if (!isRecording) {
-    console.log("[VoiceRecorder] Not recording — component not rendering");
     return null;
   }
 
@@ -105,10 +88,20 @@ export default function VoiceRecorder({ onUpload, onCancel }: VoiceRecorderProps
       </div>
 
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" className="text-red-500 h-6 px-2" onClick={handleCancel}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-red-500 h-6 px-2"
+          onClick={handleCancel}
+        >
           Cancel
         </Button>
-        <Button variant="ghost" size="sm" className="text-green-500 h-6 px-2" onClick={handleDone}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-green-500 h-6 px-2"
+          onClick={handleDone}
+        >
           Done
         </Button>
       </div>

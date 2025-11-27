@@ -22,7 +22,7 @@ export interface Message {
   groupId?: string;
   senderName?: string; // For group chat display
   timestamp: string; // ISO string
-  type: "text" | "file";
+  type: "text" | "file" | "voice";
 }
 
 export interface MessagesState {
@@ -122,7 +122,7 @@ const messagesSlice = createSlice({
 
       const messageIndex = conversation.findIndex(
         (msg) =>
-          msg.type === "file" &&
+          (msg.type === "file" || msg.type === "voice") &&
           typeof msg.content !== "string" &&
           msg.content.transferId === transferId
       );

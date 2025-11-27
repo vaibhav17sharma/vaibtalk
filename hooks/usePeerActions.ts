@@ -41,9 +41,7 @@ export function usePeerActions() {
       const sanitizedToPeerId = sanitizePeerId(toPeerId);
       const conn = peerManager.getConnection(sanitizedToPeerId);
       
-      console.log("[usePeerActions] sendMessage", message, "to", sanitizedToPeerId);
-      console.log("[usePeerActions] Connection exists:", !!conn);
-      console.log("[usePeerActions] Connection open:", conn?.open);
+
       
       if (conn?.open) {
         conn.send({
@@ -51,7 +49,7 @@ export function usePeerActions() {
           content: message,
           senderId: fromPeerId // Send original ID
         });
-        console.log("[usePeerActions] Message sent to", sanitizedToPeerId);
+
         dispatch(
           addMessage({
             sender: fromPeerId,
@@ -61,10 +59,7 @@ export function usePeerActions() {
           })
         );
       } else {
-        console.warn(
-          "[usePeerActions] Connection not open, queueing message for",
-          sanitizedToPeerId
-        );
+
         dispatch(enqueueMessage({ toPeerId: sanitizedToPeerId, message }));
       }
     },
@@ -77,10 +72,7 @@ export function usePeerActions() {
       const conn = peerManager.getConnection(sanitizedToPeerId);
       
       if (!conn?.open) {
-        console.warn(
-          "[usePeerActions] Cannot send file, connection not open for",
-          toPeerId
-        );
+
         return false;
       }
 
@@ -88,14 +80,33 @@ export function usePeerActions() {
       const CHUNK_SIZE = 16 * 1024;
 
       try {
+        // Send file metadata with senderId
         conn.send({
           type: "file-metadata",
           transferId,
           fileName: file.name,
           fileSize: file.size,
           mimeType: file.type,
+          senderId: fromPeerId, // Include sender ID
         });
 
+        // Add message to sender's chat immediately
+        dispatch(
+          addMessage({
+            sender: fromPeerId,
+            receiver: toPeerId,
+            content: {
+              transferId,
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              status: "completed", // Mark as completed for sender
+            },
+            type: file.type.startsWith("audio/") ? "voice" : "file",
+          })
+        );
+
+        // Send file chunks
         let offset = 0;
         while (offset < file.size) {
           const chunk = file.slice(offset, offset + CHUNK_SIZE);
@@ -115,7 +126,7 @@ export function usePeerActions() {
         return false;
       }
     },
-    []
+    [dispatch]
   );
 
   const connect = useCallback(
@@ -123,16 +134,16 @@ export function usePeerActions() {
       const sanitizedTargetId = sanitizePeerId(targetId);
       
       if (!peerManager.peer) {
-        console.warn("[usePeerActions] No Peer instance available");
+
         return;
       }
       
       if (peerManager.hasConnection(sanitizedTargetId)) {
-        console.log("[usePeerActions] Already connected to", sanitizedTargetId);
+
         return;
       }
 
-      console.log("[usePeerActions] Initiating connection to:", sanitizedTargetId);
+
       
       const conn = peerManager.peer.connect(sanitizedTargetId, {
         reliable: true,
@@ -146,12 +157,12 @@ export function usePeerActions() {
       peerManager.addConnection(conn);
 
       conn.on("open", () => {
-        console.log("[usePeerActions] Outgoing connection open:", conn.peer);
+
         dispatch(addConnection(conn.peer));
       });
 
       conn.on("data", (data: any) => {
-        console.log("[usePeerActions] Received data from", conn.peer);
+
         const senderId = data?.senderId || conn.peer;
 
         if (data?.type === "text") {
@@ -169,7 +180,7 @@ export function usePeerActions() {
       });
 
       conn.on("close", () => {
-        console.log("[usePeerActions] Connection closed:", conn.peer);
+
         peerManager.removeConnection(conn);
         if (!peerManager.hasConnection(conn.peer)) {
            dispatch(removeConnection(conn.peer));
@@ -188,7 +199,7 @@ export function usePeerActions() {
       const sanitizedTargetId = sanitizePeerId(targetId);
       
       if (!peerManager.peer || !peerManager.hasConnection(sanitizedTargetId)) {
-        console.warn("[usePeerActions] Cannot switch media, missing peer or connection");
+
         return;
       }
 
@@ -225,7 +236,7 @@ export function usePeerActions() {
   const endMedia = useCallback(
     (targetId: string) => {
       const sanitizedTargetId = sanitizePeerId(targetId);
-      console.log("[usePeerActions] Ending media with:", sanitizedTargetId);
+
       peerManager.removeMediaConnection(sanitizedTargetId);
     },
     []
@@ -233,13 +244,10 @@ export function usePeerActions() {
 
   const acceptIncomingCall = useCallback(async () => {
     const call = peerManager.pendingCall;
-    if (!call) {
-      console.warn("[usePeerActions] No pending call to accept");
-      return;
-    }
+    if (!call) return;
 
     try {
-      console.log("[usePeerActions] Accepting call from:", call.peer);
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
@@ -262,13 +270,13 @@ export function usePeerActions() {
       router.push("/call");
 
       call.on("stream", (remoteStream) => {
-        console.log("[usePeerActions] Received remote stream from:", call.peer);
+
         peerManager.setRemoteStream(call.peer, remoteStream); // Store stream
         dispatch(setActiveMediaType({ peerId: call.peer, type: "video" }));
       });
 
       call.on("close", () => {
-        console.log("[usePeerActions] Call closed with:", call.peer);
+
         peerManager.removeMediaConnection(call.peer);
         dispatch(removeMediaConnection(call.peer));
       });
@@ -284,7 +292,7 @@ export function usePeerActions() {
   const rejectIncomingCall = useCallback(() => {
     const call = peerManager.pendingCall;
     if (call) {
-      console.log("[usePeerActions] Rejecting call from:", call.peer);
+
       call.close();
       peerManager.pendingCall = null;
     }
