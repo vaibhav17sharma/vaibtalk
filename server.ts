@@ -47,16 +47,7 @@ app.prepare().then(() => {
     }
   });
 
-  const io = new Server(httpServer, {
-    cors: {
-      origin: true, // Allow all origins (Cloudflare Tunnel changes origin)
-      credentials: true,
-    },
-    pingTimeout: 60000,
-    pingInterval: 25000,
-    transports: ['websocket', 'polling'],
-    allowEIO3: true, // Backward compatibility
-  });
+  const io = new Server(httpServer);
 
   io.on("connection", (socket) => {
     console.log("Client connected", socket.id);
