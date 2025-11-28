@@ -130,12 +130,15 @@ export default function VideoPage() {
     }
 
     return () => {
-      // Ensure local tracks are stopped when component unmounts
-      if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => {
+          track.stop();
+          track.enabled = false;
+        });
+        localStreamRef.current = null;
       }
     };
-  }, [activeContact, localStream]);
+  }, [activeContact]);
 
   // Ensure data connection is established for messages/signaling
   const { connect } = usePeerActions();

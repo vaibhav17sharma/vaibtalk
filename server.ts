@@ -47,7 +47,16 @@ app.prepare().then(() => {
     }
   });
 
-  const io = new Server(httpServer);
+  const io = new Server(httpServer, {
+    cors: {
+      origin: process.env.NEXT_PUBLIC_SITE_URL || "*",
+      methods: ["GET", "POST"],
+      credentials: true,
+    },
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    transports: ['websocket', 'polling'],
+  });
 
   io.on("connection", (socket) => {
     console.log("Client connected", socket.id);

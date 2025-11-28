@@ -38,6 +38,10 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     const socketInstance = io(socketUrl, {
       path: "/socket.io",
       addTrailingSlash: false,
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
     });
 
     socketInstance.on("connect", () => {
