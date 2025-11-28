@@ -28,13 +28,17 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       return;
     }
 
-    const socketInstance = io(
-      process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
-      {
-        path: "/socket.io",
-        addTrailingSlash: false,
-      }
-    );
+    // Use NEXT_PUBLIC_SITE_URL if set, otherwise use current origin (works in production)
+    const socketUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      (typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost:3000");
+
+    const socketInstance = io(socketUrl, {
+      path: "/socket.io",
+      addTrailingSlash: false,
+    });
 
     socketInstance.on("connect", () => {
       console.log("Socket connected:", socketInstance.id);
