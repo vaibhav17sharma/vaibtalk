@@ -7,7 +7,15 @@ import { cn, dateFormat } from "@/lib/utils";
 import peerManager from "@/store/peerManager";
 import { selectContactByUsername } from "@/store/slice/contactSlice";
 import { AvatarImage } from "@radix-ui/react-avatar";
-import { Ban, Download, FileText, Loader2, Pause, Play } from "lucide-react";
+import {
+  Ban,
+  Download,
+  FileText,
+  Loader2,
+  Mic,
+  Pause,
+  Play,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import WaveSurfer from "wavesurfer.js";
@@ -200,13 +208,37 @@ export default function ChatMessage({ message }: ChatMessageProps) {
 
     if (type.startsWith("audio/")) {
       const file = peerManager.getFile(transferId as string);
+
       if (!file) return null;
-      if (file && !(file instanceof File)) {
-        return;
+
+      // Check if it's a Blob/File (File extends Blob)
+      if (file instanceof Blob) {
+        return renderVoiceNote(file as File);
       }
-      if (file instanceof File) {
-        return renderVoiceNote(file);
-      }
+
+      // If we only have metadata (not a Blob), show a placeholder
+      // This happens if we are the sender but for some reason the file wasn't stored,
+      // or if we are the receiver and haven't downloaded it yet (though usually we get a blob).
+      return (
+        <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-md">
+          <div className="bg-muted/50 w-10 h-10 rounded-md flex items-center justify-center">
+            <Mic className="w-5 h-5 text-muted-foreground" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium">Audio Message</p>
+            <p className="text-xs text-muted-foreground">
+              {formatFileSize(Number(size))}
+            </p>
+          </div>
+          {/* Show progress if active */}
+          {(fileTransfer?.status === "active" ||
+            fileTransfer?.status === "pending") && (
+            <div className="w-20">
+              <Progress value={fileTransfer?.progress} />
+            </div>
+          )}
+        </div>
+      );
     }
 
     return (

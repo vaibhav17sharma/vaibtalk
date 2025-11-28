@@ -228,6 +228,16 @@ export default function VideoPage() {
           audio: true,
         });
 
+        // CRITICAL FIX: Check if component unmounted while we were waiting for camera
+        if (!initializingRef.current) {
+          // Cleanup ran! Stop this stream immediately.
+          console.log(
+            "[VideoPage] Component unmounted during init, stopping stream"
+          );
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
         // Register with global manager for robust cleanup
         peerManager.registerLocalStream(stream);
 
@@ -332,6 +342,7 @@ export default function VideoPage() {
 
     return () => {
       // Robust cleanup using global manager
+      initializingRef.current = false; // Signal that we are unmounting
       peerManager.cleanupAllLocalStreams();
 
       if (localStreamRef.current) {
@@ -342,7 +353,6 @@ export default function VideoPage() {
         localStreamRef.current = null;
       }
       setLocalStream(null);
-      initializingRef.current = false;
     };
   }, [activeContact]);
 
