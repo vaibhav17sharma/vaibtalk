@@ -129,7 +129,14 @@ export default function VideoPage() {
   };
 
   const replaceStream = (newStream: MediaStream) => {
+    // Stop old stream tracks to ensure camera light goes off
+    if (localStream && localStream.id !== newStream.id) {
+      localStream.getTracks().forEach((track) => track.stop());
+    }
+
     setLocalStream(newStream);
+    localStreamRef.current = newStream;
+
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = newStream;
     }
@@ -190,6 +197,7 @@ export default function VideoPage() {
           video: true,
           audio: true,
         });
+
         replaceStream(stream);
         setIsScreenSharing(true);
 
@@ -254,6 +262,24 @@ export default function VideoPage() {
               "[CallPage] Resuming existing active call with:",
               existingCall.peer
             );
+
+            // CRITICAL FIX: Ensure the existing call uses the NEW stream we just created
+            // Otherwise, toggling mute/video on 'stream' won't affect the call!
+            if (existingCall.peerConnection) {
+              const senders = existingCall.peerConnection.getSenders();
+              const videoSender = senders.find(
+                (s: any) => s.track?.kind === "video"
+              );
+              const audioSender = senders.find(
+                (s: any) => s.track?.kind === "audio"
+              );
+
+              if (videoSender)
+                videoSender.replaceTrack(stream.getVideoTracks()[0]);
+              if (audioSender)
+                audioSender.replaceTrack(stream.getAudioTracks()[0]);
+            }
+
             // If it's not open, maybe we need to answer? But usually it's open if it's in active list.
             if (!existingCall.open) {
               existingCall.answer(stream);
