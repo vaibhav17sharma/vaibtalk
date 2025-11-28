@@ -310,6 +310,14 @@ export default function VideoPage() {
     };
   }, [activeContact]);
 
+  // Fix for blank screen: Ensure video element gets the stream when it mounts/updates
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) {
+      console.log("[VideoPage] Attaching remote stream to video element");
+      remoteVideoRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream]);
+
   // Ensure data connection is established for messages/signaling
   const { connect } = usePeerActions();
   useEffect(() => {

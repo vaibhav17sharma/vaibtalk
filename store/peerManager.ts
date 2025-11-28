@@ -14,6 +14,7 @@ class PeerManager {
       direction: "incoming" | "outgoing";
       chunks: ArrayBuffer[];
       meta?: { fileName: string; fileSize: number; mimeType?: string };
+      file?: File;
       abortController?: AbortController;
     }
   >();
@@ -46,6 +47,7 @@ class PeerManager {
       fileName?: string;
       fileSize?: number;
       mimeType?: string;
+      file?: File; // Add optional file for outgoing transfers
     }
   ) {
     this._fileTransfers.set(transferId, {
@@ -59,6 +61,7 @@ class PeerManager {
             mimeType: config.mimeType,
           }
         : undefined,
+      file: config.file, // Store the file
       abortController:
         config.direction === "outgoing" ? new AbortController() : undefined,
     });
@@ -74,6 +77,9 @@ class PeerManager {
   finalizeFileTransfer(transferId: string): File | null {
     const transfer = this._fileTransfers.get(transferId);
     if (!transfer || !transfer.meta) return null;
+
+    // If we already have the file (outgoing), return it
+    if (transfer.file) return transfer.file;
 
     const blob = new Blob(transfer.chunks);
     const file = new File([blob], transfer.meta.fileName, {
@@ -91,6 +97,9 @@ class PeerManager {
     const transfer = this._fileTransfers.get(transferId);
 
     if (!transfer || !transfer.meta) return null;
+
+    // If we have the file (outgoing), return it directly
+    if (transfer.file) return transfer.file;
 
     if (transfer.direction === "outgoing") {
       return {

@@ -97,6 +97,15 @@ export function usePeerActions() {
       const transferId = `${fromPeerId}-${Date.now()}`;
       const CHUNK_SIZE = 16 * 1024;
 
+      peerManager.startFileTransfer(transferId, {
+        peerId: toPeerId,
+        direction: "outgoing",
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type,
+        file: file,
+      });
+
       try {
         // Send file metadata with senderId
         conn.send({
@@ -105,9 +114,8 @@ export function usePeerActions() {
           fileName: file.name,
           fileSize: file.size,
           mimeType: file.type,
-          senderId: fromPeerId, // Include sender ID
+          senderId: fromPeerId,
         });
-
         // Add message to sender's chat immediately
         dispatch(
           addMessage({

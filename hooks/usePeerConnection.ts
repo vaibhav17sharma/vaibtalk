@@ -366,6 +366,7 @@ export default function usePeerConnection(
         fileName: file.name,
         fileSize: file.size,
         mimeType: file.type,
+        file: file,
       });
 
       try {
