@@ -18,8 +18,13 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "vaibtalk",
+  title: "VaibTalk",
   description: "A peer to peer all in one solution",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/logo.svg",
+  },
 };
 
 export default function RootLayout({
@@ -47,4 +52,3 @@ export default function RootLayout({
     </html>
   );
 }
-

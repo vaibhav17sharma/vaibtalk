@@ -1,6 +1,14 @@
 "use client";
 import { cn } from "@/lib/utils";
-import { Contact, LogOutIcon, Menu, MessageSquare, Settings2, UserIcon, X } from "lucide-react";
+import {
+  Contact,
+  LogOutIcon,
+  Menu,
+  MessageSquare,
+  Settings2,
+  UserIcon,
+  X,
+} from "lucide-react";
 import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -22,7 +30,8 @@ export const Appbar = () => {
 
   return (
     <>
-      <header id={"navbar"}
+      <header
+        id={"navbar"}
         className={cn(
           "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
           isScrolled
@@ -32,6 +41,7 @@ export const Appbar = () => {
       >
         <div className="container mx-auto flex justify-between items-center h-16 px-4">
           <Link href="/" className="flex items-center gap-2">
+            <img src="/logo.svg" alt="VaibTalk Logo" className="w-8 h-8" />
             <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-purple-400">
               VaibTalk
             </span>

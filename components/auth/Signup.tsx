@@ -2,12 +2,12 @@
 
 import { Button } from "@/components/ui/button";
 import {
-    Form,
-    FormControl,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -74,6 +74,9 @@ export default function Signup() {
       <div className="w-full max-w-md z-10">
         <div className="bg-background/50 backdrop-blur-lg p-8 rounded-lg border border-purple-500/20 shadow-xl">
           <div className="text-center mb-8">
+            <div className="flex justify-center mb-4">
+              <img src="/logo.svg" alt="VaibTalk Logo" className="w-16 h-16" />
+            </div>
             <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-500 to-purple-500">
               Create Account
             </h1>
