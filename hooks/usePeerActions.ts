@@ -5,14 +5,12 @@ import {
   addMessage,
 } from "@/store/slice/chatbookSlice";
 import {
-  addConnection,
   addMediaConnection,
   enqueueMessage,
-  removeConnection,
   removeMediaConnection,
   setActiveContact,
   setActiveMediaType,
-  setIncomingCall,
+  setIncomingCall
 } from "@/store/slice/peerSlice";
 import { RootState } from "@/store/store";
 import { useRouter } from "next/navigation";
@@ -23,6 +21,8 @@ import { useAppDispatch, useAppSelector } from "./useRedux";
  * Hook to access peer connection functions without creating a new Peer instance
  * Use this in pages that need to send messages/files but shouldn't create their own Peer
  */
+import { useConnectionSetup } from "./useConnectionSetup";
+
 export function usePeerActions() {
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -31,13 +31,15 @@ export function usePeerActions() {
     (state: RootState) => state.peer.connectionStatus
   );
 
+  const { setupConnection } = useConnectionSetup();
+
   const sanitizePeerId = (id: string) => {
     if (!id) return "";
     return id.replace(/[^a-zA-Z0-9_-]/g, "_");
   };
 
   const sendMessage = useCallback(
-    (message: string, toPeerId: string, fromPeerId: string) => {
+    async (message: string, toPeerId: string, fromPeerId: string) => {
       const sanitizedToPeerId = sanitizePeerId(toPeerId);
       const conn = peerManager.getConnection(sanitizedToPeerId);
       
@@ -58,6 +60,22 @@ export function usePeerActions() {
             type: "text",
           })
         );
+        
+        // Persist message to DB
+        try {
+          await fetch("/api/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              content: message,
+              receiverId: toPeerId,
+              type: "text"
+            })
+          });
+        } catch (error) {
+          console.error("Failed to save message:", error);
+        }
+
       } else {
 
         dispatch(enqueueMessage({ toPeerId: sanitizedToPeerId, message }));
@@ -150,48 +168,17 @@ export function usePeerActions() {
         metadata: { connectingFrom: peerManager.peer.id }
       });
 
-      // Setup listeners for this outgoing connection
-      // This duplicates logic from usePeerConnection but is necessary because
-      // peer.on('connection') only fires for INCOMING connections.
+      // Use shared setup logic
+      // We need to pass the current user's ID (peerId) to setupConnection
+      // peerId from Redux might be null if not initialized yet, but peerManager.peer.id should be available
+      const currentId = peerManager.peer.id;
+      setupConnection(conn, currentId);
       
-      peerManager.addConnection(conn);
-
-      conn.on("open", () => {
-
-        dispatch(addConnection(conn.peer));
-      });
-
-      conn.on("data", (data: any) => {
-
-        const senderId = data?.senderId || conn.peer;
-
-        if (data?.type === "text") {
-          dispatch(
-            addMessage({
-              sender: senderId,
-              receiver: peerManager.peer?.id || "",
-              content: data.content,
-              type: "text",
-            })
-          );
-        }
-        // Note: File transfer logic omitted for brevity in this hook fallback.
-        // Ideally, usePeerConnection should be refactored to share setup logic.
-      });
-
-      conn.on("close", () => {
-
-        peerManager.removeConnection(conn);
-        if (!peerManager.hasConnection(conn.peer)) {
-           dispatch(removeConnection(conn.peer));
-        }
-      });
-
       conn.on("error", (err) => {
         console.error("[usePeerActions] Connection error:", err);
       });
     },
-    [dispatch],
+    [dispatch, setupConnection],
   );
 
   const switchMedia = useCallback(

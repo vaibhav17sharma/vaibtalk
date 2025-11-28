@@ -41,8 +41,15 @@ export default function VideoPage() {
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
 
-  // Helper to get active call
+  // --- Helpers ---
+
+  const sanitizePeerId = (id: string) => {
+    if (!id) return "";
+    return id.replace(/[^a-zA-Z0-9_-]/g, "_");
+  };
+
   const getActiveCall = () => {
     if (!activeContact?.username) return null;
     return peerManager.getMediaConnection(
@@ -50,103 +57,54 @@ export default function VideoPage() {
     );
   };
 
-  const sanitizePeerId = (id: string) => {
-    if (!id) return "";
-    return id.replace(/[^a-zA-Z0-9_-]/g, "_");
-  };
+  // --- Actions ---
 
-  const localStreamRef = useRef<MediaStream | null>(null);
-
-  // Initialize local stream
-  useEffect(() => {
-    const initMedia = async () => {
-      try {
-        // Double check if we already have a stream to avoid re-requesting
-        if (localStreamRef.current) return;
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
-        });
-
-        setLocalStream(stream);
-        localStreamRef.current = stream;
-
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
-
-        // If we initiated the call (activeMediaType is set), call the peer
-        if (
-          activeContact?.username &&
-          activeMediaType[activeContact.username] !== "none"
-        ) {
-          const targetId = sanitizePeerId(activeContact.username);
-          console.log("[CallPage] Calling peer:", targetId);
-          const call = peerManager.peer?.call(targetId, stream);
-          if (call) {
-            peerManager.addMediaConnection(call);
-            setupCallEvents(call);
-          }
-        }
-      } catch (error) {
-        console.error("Error accessing media devices:", error);
-        toast.error("Failed to access camera/microphone");
-      }
-    };
-
-    // If there's an incoming call that was accepted (stream might be set in usePeerActions, but let's ensure we have local stream)
-    // Actually, usePeerActions handles the answer() part. We just need to attach streams.
-    // Let's check if we already have a call connection
-    const existingCall = getActiveCall();
-    if (existingCall) {
-      setupCallEvents(existingCall);
-
-      // Check if stream is already available in PeerManager
-      if (activeContact?.username) {
-        const storedStream = peerManager.getRemoteStream(
-          sanitizePeerId(activeContact.username)
-        );
-        if (storedStream) {
-          console.log("Found stored remote stream");
-          setRemoteStream(storedStream);
-          if (remoteVideoRef.current) {
-            remoteVideoRef.current.srcObject = storedStream;
-          }
-        }
-      }
-
-      // We might need to get local stream if not already there (e.g. if we are the receiver)
-      if (!localStream) {
-        navigator.mediaDevices
-          .getUserMedia({ video: true, audio: true })
-          .then((stream) => {
-            setLocalStream(stream);
-            if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-          });
-      }
-    } else {
-      initMedia();
+  const endCall = () => {
+    // Stop tracks from state
+    if (localStream) {
+      localStream.getTracks().forEach((track) => {
+        track.stop();
+        track.enabled = false;
+      });
     }
 
-    return () => {
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((track) => {
-          track.stop();
-          track.enabled = false;
-        });
-        localStreamRef.current = null;
-      }
-    };
-  }, [activeContact]);
+    // Stop tracks from ref (backup)
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => {
+        track.stop();
+        track.enabled = false;
+      });
+      localStreamRef.current = null;
+    }
 
-  // Ensure data connection is established for messages/signaling
-  const { connect } = usePeerActions();
-  useEffect(() => {
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    setLocalStream(null);
+    setRemoteStream(null);
+
     if (activeContact?.username) {
-      connect(activeContact.username);
+      // Send END_CALL signal
+      const targetId = sanitizePeerId(activeContact.username);
+      const conn = peerManager.getConnection(targetId);
+      if (conn?.open) {
+        conn.send({ type: "END_CALL" });
+        console.log("[CallPage] Sent END_CALL to", targetId);
+      }
+
+      peerManager.removeMediaConnection(targetId);
+      dispatch(removeMediaConnection(targetId));
     }
-  }, [activeContact, connect]);
+
+    dispatch(
+      setActiveMediaType({
+        peerId: activeContact?.username || "",
+        type: "none",
+      })
+    );
+
+    dispatch(clearActiveContact());
+    router.push("/dashboard");
+  };
 
   const setupCallEvents = (call: any) => {
     call.on("stream", (stream: MediaStream) => {
@@ -170,11 +128,27 @@ export default function VideoPage() {
     });
   };
 
+  const replaceStream = (newStream: MediaStream) => {
+    setLocalStream(newStream);
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = newStream;
+    }
+
+    const call = getActiveCall();
+    if (call && call.peerConnection) {
+      const senders = call.peerConnection.getSenders();
+      const videoSender = senders.find((s: any) => s.track?.kind === "video");
+      const audioSender = senders.find((s: any) => s.track?.kind === "audio");
+
+      if (videoSender) videoSender.replaceTrack(newStream.getVideoTracks()[0]);
+      if (audioSender) audioSender.replaceTrack(newStream.getAudioTracks()[0]);
+    }
+  };
+
   const toggleAudio = () => {
     if (localStream) {
       const audioTrack = localStream.getAudioTracks()[0];
       if (audioTrack) {
-        // Toggle based on current state to ensure sync
         const newEnabledState = !isAudioEnabled;
         audioTrack.enabled = newEnabledState;
         setIsAudioEnabled(newEnabledState);
@@ -187,7 +161,6 @@ export default function VideoPage() {
     if (localStream) {
       const videoTrack = localStream.getVideoTracks()[0];
       if (videoTrack) {
-        // Toggle based on current state to ensure sync
         const newEnabledState = !isVideoEnabled;
         videoTrack.enabled = newEnabledState;
         setIsVideoEnabled(newEnabledState);
@@ -230,79 +203,120 @@ export default function VideoPage() {
     }
   };
 
-  const replaceStream = (newStream: MediaStream) => {
-    setLocalStream(newStream);
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = newStream;
-    }
+  // --- Effects ---
 
-    const call = getActiveCall();
-    if (call && call.peerConnection) {
-      const senders = call.peerConnection.getSenders();
-      const videoSender = senders.find((s: any) => s.track?.kind === "video");
-      const audioSender = senders.find((s: any) => s.track?.kind === "audio");
+  // Initialize local stream & Handle Call Logic
+  useEffect(() => {
+    const initMedia = async () => {
+      try {
+        // Double check if we already have a stream to avoid re-requesting
+        if (localStreamRef.current) return;
 
-      if (videoSender) videoSender.replaceTrack(newStream.getVideoTracks()[0]);
-      if (audioSender) audioSender.replaceTrack(newStream.getAudioTracks()[0]);
-    }
-  };
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
 
-  const endCall = () => {
-    // Stop tracks from state
-    if (localStream) {
-      localStream.getTracks().forEach((track) => {
-        track.stop();
-        track.enabled = false;
-      });
-    }
+        setLocalStream(stream);
+        localStreamRef.current = stream;
 
-    // Stop tracks from ref (backup)
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => {
-        track.stop();
-        track.enabled = false;
-      });
-      localStreamRef.current = null;
-    }
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
 
-    if (localVideoRef.current) localVideoRef.current.srcObject = null;
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-    setLocalStream(null);
-    setRemoteStream(null);
+        // 1. Check for PENDING incoming call (The one we just accepted)
+        if (
+          peerManager.pendingCall &&
+          peerManager.pendingCall.peer ===
+            sanitizePeerId(activeContact?.username || "")
+        ) {
+          const call = peerManager.pendingCall;
+          console.log("[CallPage] Answering PENDING call from:", call.peer);
 
-    if (activeContact?.username) {
-      // Send END_CALL signal
-      const targetId = sanitizePeerId(activeContact.username);
-      const conn = peerManager.getConnection(targetId);
-      if (conn?.open) {
-        conn.send({ type: "END_CALL" });
-        console.log("[CallPage] Sent END_CALL to", targetId);
+          call.answer(stream); // Answer with our stream
+          peerManager.addMediaConnection(call); // Register it as active
+          peerManager.pendingCall = null; // Clear pending
+
+          setupCallEvents(call);
+
+          // If remote stream is already there (race condition)
+          if (call.remoteStream) {
+            setRemoteStream(call.remoteStream);
+            if (remoteVideoRef.current)
+              remoteVideoRef.current.srcObject = call.remoteStream;
+          }
+        }
+        // 2. Check for existing ACTIVE call (if we refreshed or navigated back)
+        else {
+          const existingCall = getActiveCall();
+          if (existingCall) {
+            console.log(
+              "[CallPage] Resuming existing active call with:",
+              existingCall.peer
+            );
+            // If it's not open, maybe we need to answer? But usually it's open if it's in active list.
+            if (!existingCall.open) {
+              existingCall.answer(stream);
+            }
+            setupCallEvents(existingCall);
+
+            if (existingCall.remoteStream) {
+              setRemoteStream(existingCall.remoteStream);
+              if (remoteVideoRef.current)
+                remoteVideoRef.current.srcObject = existingCall.remoteStream;
+            }
+          }
+          // 3. If no pending and no active, WE are the caller
+          else if (
+            activeContact?.username &&
+            activeMediaType[activeContact.username] !== "none"
+          ) {
+            const targetId = sanitizePeerId(activeContact.username);
+            console.log("[CallPage] Initiating NEW call to:", targetId);
+
+            if (!peerManager.peer) {
+              console.error("[CallPage] Cannot call: Peer instance not ready");
+              toast.error(
+                "Connection not ready. Please try again in a moment."
+              );
+              return;
+            }
+
+            const call = peerManager.peer.call(targetId, stream);
+            if (call) {
+              peerManager.addMediaConnection(call);
+              setupCallEvents(call);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error accessing media devices:", error);
+        toast.error("Failed to access camera/microphone");
       }
+    };
 
-      peerManager.removeMediaConnection(targetId);
-      dispatch(removeMediaConnection(targetId)); // Redux might expect original ID? No, slice usually uses what we give it.
-      // Actually, peerSlice probably expects the ID used in the map.
-      // Let's check peerSlice later, but for now consistency is key.
-      // If we stored it as sanitized, we should remove it as sanitized.
+    initMedia();
+
+    return () => {
+      // Robust cleanup
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => {
+          track.stop();
+          track.enabled = false;
+        });
+        localStreamRef.current = null;
+      }
+      setLocalStream(null);
+    };
+  }, [activeContact]);
+
+  // Ensure data connection is established for messages/signaling
+  const { connect } = usePeerActions();
+  useEffect(() => {
+    if (activeContact?.username) {
+      connect(activeContact.username);
     }
-
-    dispatch(
-      setActiveMediaType({
-        peerId: activeContact?.username || "",
-        type: "none",
-      })
-    );
-
-    // Clear active contact so we don't return to a broken chat state
-    // We need to import clearActiveContact or just set it to null if the action exists
-    // checking imports... we need to add clearActiveContact to imports if not there
-    // For now, let's assume we can dispatch an action to clear it.
-    // Actually, looking at imports, we don't have clearActiveContact imported.
-    // I will add it in a separate edit.
-
-    dispatch(clearActiveContact());
-    router.push("/dashboard");
-  };
+  }, [activeContact, connect]);
 
   if (!activeContact) {
     return (

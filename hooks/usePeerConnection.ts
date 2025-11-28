@@ -9,7 +9,6 @@ import {
   addConnection,
   addMediaConnection,
   cancelFileTransfer,
-  clearMessageQueue,
   completeFileTransfer,
   enqueueMessage,
   removeConnection,
@@ -19,11 +18,11 @@ import {
   setIncomingCall,
   setPeerId,
   startFileTransfer,
-  updateTransferProgress,
+  updateTransferProgress
 } from "@/store/slice/peerSlice";
 import type { RootState } from "@/store/store";
 import Peer, { DataConnection } from "peerjs";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "./useRedux";
 
 export type FileMeta = { isMeta: true; fileName: string; fileSize: number };
@@ -40,6 +39,10 @@ const sanitizePeerId = (id: string) => {
   return id.replace(/[^a-zA-Z0-9_-]/g, "_");
 };
 
+import { useConnectionSetup } from "./useConnectionSetup";
+
+// ... imports ...
+
 export default function usePeerConnection(
   uniqueID: string,
   mediaCallbacks?: MediaCallbacks
@@ -52,198 +55,36 @@ export default function usePeerConnection(
   const activeMediaType = useAppSelector(
     (state: RootState) => state.peer.activeMediaType
   );
-  const messageQueue = useAppSelector(
-    (state: RootState) => state.peer.messageQueue
-  );
+  
+  // Use the shared setup hook
+  const { setupConnection } = useConnectionSetup();
 
   const localMediaStreamRef = useRef<MediaStream | null>(null);
-  const messageQueueRef = useRef(messageQueue);
-
+  
   // Update refs when values change
   const mediaCallbacksRef = useRef<MediaCallbacks | undefined>(mediaCallbacks);
   useEffect(() => {
     mediaCallbacksRef.current = mediaCallbacks;
-    messageQueueRef.current = messageQueue;
-  }, [mediaCallbacks, messageQueue]);
+  }, [mediaCallbacks]);
+  
+  // setupConnection is now provided by the hook, so we don't define it here.
+  // But we need to pass uniqueID to it.
+  // The hook returns a function that takes (conn, uniqueID).
+  
+  const handleConnection = useCallback((conn: DataConnection) => {
+      setupConnection(conn, uniqueID);
+  }, [setupConnection, uniqueID]);
 
-  const setupConnection = useCallback(
-    (conn: DataConnection) => {
+  // ... rest of the file ...
 
-
-      peerManager.addConnection(conn);
-      // Don't dispatch addConnection yet - wait for 'open' event
-      // dispatch(addConnection(conn.peer)); 
-
-      // Check if connection is already open (race condition fix)
-      if (conn.open) {
-
-        dispatch(addConnection(conn.peer)); // Add to Redux only if open
-        dispatch(setConnectionStatus("connected"));
-        dispatch(clearMessageQueue(conn.peer));
-      }
-
-      // Monitor ICE connection state for debugging
-      if (conn.peerConnection) {
-
-      }
-
-      conn.on("open", () => {
-
-        dispatch(addConnection(conn.peer)); // Add to Redux now that it's open
-        dispatch(setConnectionStatus("connected"));
-        
-        // Send any queued messages
-        const queuedMessages = messageQueueRef.current[conn.peer] || [];
-
-        
-        queuedMessages.forEach((message: string) => {
-          if (conn.open) {
-            conn.send(message);
-
-          }
-        });
-        
-        dispatch(clearMessageQueue(conn.peer));
-      });
-
-      conn.on("data", async (data: any) => {
-
-        if (conn.peer === uniqueID) return;
-        
-        // Use the explicit senderId from payload if available, otherwise fallback to conn.peer
-        // This fixes the issue where sanitized IDs (user_name) don't match contact IDs (user.name)
-        const senderId = data?.senderId || conn.peer;
-
-        if (data?.type === "file-metadata") {
-          const transferId = data.transferId;
-
-          dispatch(
-            addMessage({
-              sender: senderId,
-              receiver: uniqueID,
-              content: {
-                transferId: data.transferId,
-                name: data.fileName,
-                size: data.fileSize,
-                status: "pending",
-                type: data.mimeType,
-              },
-              type: "file",
-            })
-          );
-
-          dispatch(
-            startFileTransfer({
-              transferId,
-              peerId: senderId,
-              direction: "incoming",
-              fileName: data.fileName,
-              fileSize: data.fileSize,
-              mimeType: data.mimeType,
-            })
-          );
-
-          peerManager.startFileTransfer(transferId, {
-            peerId: senderId,
-            direction: "incoming",
-            fileName: data.fileName,
-            fileSize: data.fileSize,
-            mimeType: data.mimeType,
-          });
-        } else if (data?.type === "file-chunk") {
-          const transferId = data.transferId;
-
-          const transfer = peerManager.getTransfer(transferId);
-          if (!transfer || !transfer.meta) return 0;
-
-          const chunk = data.chunk;
-
-          peerManager.appendFileChunk(transferId, chunk);
-
-          const receivedBytes = transfer.chunks.reduce(
-            (acc, c) => acc + c.byteLength,
-            0
-          );
-          const progress = (receivedBytes / transfer.meta.fileSize) * 100;
-
-          dispatch(
-            updateTransferProgress({
-              transferId,
-              progress: Math.min(100, progress),
-            })
-          );
-
-          if (receivedBytes >= transfer.meta!.fileSize) {
-            dispatch(completeFileTransfer(data.transferId));
-            dispatch(
-              updateMessageByTransferId({
-                sender: senderId, // Use the stored peerId from transfer would be safer, but this works if consistent
-                receiver: uniqueID,
-                transferId: data.transferId,
-                updatedFields: {
-                  content: {
-                    transferId: data.transferId,
-                    size: transfer.meta!.fileSize,
-                    name: transfer.meta!.fileName,
-                    type: transfer.meta!.mimeType as string,
-                    progress,
-                    status: "completed",
-                  },
-                },
-              })
-            );
-          }
-        } else if (data?.type === "text") {
-          dispatch(
-            addMessage({
-              sender: senderId,
-              receiver: uniqueID,
-              content: data.content,
-              type: "text",
-            })
-          );
-        } else if (data?.type === "END_CALL") {
-
-          peerManager.removeMediaConnection(senderId);
-          dispatch(removeMediaConnection(senderId));
-          dispatch(setActiveMediaType({ peerId: senderId, type: "none" }));
-          // Optionally redirect if on call page? 
-          // The UI should react to activeMediaType change.
-        } else if (typeof data === "string") {
-          // Legacy support for plain string messages
-          dispatch(
-            addMessage({
-              sender: senderId,
-              receiver: uniqueID,
-              content: data,
-              type: "text",
-            })
-          );
-        }
-      });
-
-      conn.on("close", () => {
-
-        
-        // Remove this specific connection from manager
-        peerManager.removeConnection(conn);
-        
-        // Only update Redux if NO connections remain for this peer
-        if (!peerManager.hasConnection(conn.peer)) {
-          dispatch(removeConnection(conn.peer));
-        } else {
-        }
-      });
-
-      conn.on("error", (err) => {
-        console.error("[usePeerConnection] Connection error:", err);
-        dispatch(setConnectionStatus("disconnected"));
-      });
-    },
-    [dispatch, uniqueID]
-  );
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
+    // If we have a peer instance but it's destroyed, clear it from manager so we can recreate
+    if (peerManager.peer?.destroyed) {
+      peerManager.peer = null;
+    }
+
     if (!peerManager.peer && uniqueID) {
 
       const peerHost = process.env.NEXT_PUBLIC_PEER_SERVER_HOST;
@@ -267,15 +108,26 @@ export default function usePeerConnection(
         dispatch(setPeerId(id));
       });
 
-      peer.on("error", (err) => {
-        console.error("[usePeerConnection] Peer error:", err);
+      peer.on("error", (err: any) => {        
+        // Handle "ID taken" error (unavailable-id)
+        if (err.type === "unavailable-id") {
+          console.warn("[usePeerConnection] ID taken, retrying in 2 seconds...");
+          setTimeout(() => {
+            // Destroy the failed instance to allow recreation
+            peer.destroy();
+            peerManager.peer = null;
+            // Trigger re-run of useEffect
+            setRetryCount(prev => prev + 1);
+          }, 2000);
+        } else {
+          console.error("[usePeerConnection] Peer error:", err);
+        }
       });
 
       peer.on("connection", (conn) => {
-
         peerManager.addConnection(conn); // Always replace with the latest
         dispatch(addConnection(conn.peer));
-        setupConnection(conn);
+        handleConnection(conn);
       });
 
       peer.on("call", (call) => {
@@ -291,7 +143,6 @@ export default function usePeerConnection(
         
         // Handle if the caller cancels before we answer
         call.on("close", () => {
-
           if (peerManager.pendingCall === call) {
             peerManager.pendingCall = null;
             dispatch(setIncomingCall(null));
@@ -300,11 +151,10 @@ export default function usePeerConnection(
       });
 
       return () => {
-
         peerManager.reset();
       };
     }
-  }, [uniqueID, setupConnection, dispatch]);
+  }, [uniqueID, handleConnection, dispatch, retryCount]);
 
   const connect = useCallback(
     async (targetId: string) => {
@@ -314,13 +164,11 @@ export default function usePeerConnection(
         return;
       }
       if (peerManager.hasConnection(sanitizedTargetId)) {
-
         return;
       }
       
       // Check if peer exists on the server first
       try {
-
         const response = await fetch(
           `${peerManager.peer.options.secure ? 'https' : 'http'}://${peerManager.peer.options.host}:${peerManager.peer.options.port}${peerManager.peer.options.path}/peerjs/peers`,
           { method: 'GET' }
@@ -328,7 +176,6 @@ export default function usePeerConnection(
         
         if (response.ok) {
           const peers = await response.json();
-
           
           if (!peers.includes(sanitizedTargetId)) {
             console.error(
@@ -337,8 +184,6 @@ export default function usePeerConnection(
             );
             dispatch(setConnectionStatus("disconnected"));
             // Still attempt connection in case the API is outdated
-          } else {
-
           }
         }
       } catch (error) {
@@ -347,7 +192,6 @@ export default function usePeerConnection(
       }
       
       dispatch(setConnectionStatus("connecting"));
-
       
       const conn = peerManager.peer.connect(sanitizedTargetId, {
         reliable: true,
@@ -375,9 +219,9 @@ export default function usePeerConnection(
         clearTimeout(connectionTimeout);
       });
       
-      setupConnection(conn);
+      handleConnection(conn);
     },
-    [dispatch, setupConnection, uniqueID]
+    [dispatch, handleConnection, uniqueID]
   );
 
   const disconnect = useCallback(
