@@ -228,7 +228,31 @@ class PeerManager {
     return Array.from(this._mediaConnections.values());
   }
 
+  private _activeLocalStreams: MediaStream[] = [];
+
+  registerLocalStream(stream: MediaStream) {
+    if (!this._activeLocalStreams.find(s => s.id === stream.id)) {
+      this._activeLocalStreams.push(stream);
+    }
+  }
+
+  cleanupAllLocalStreams() {
+    this._activeLocalStreams.forEach(stream => {
+      try {
+        stream.getTracks().forEach(track => {
+          track.stop();
+          track.enabled = false;
+        });
+      } catch (e) {
+        console.error("Error stopping track:", e);
+      }
+    });
+    this._activeLocalStreams = [];
+  }
+
   reset(): void {
+    this.cleanupAllLocalStreams(); // Cleanup local streams first
+
     this._connections.forEach((conns) => {
       conns.forEach(c => c.close());
     });

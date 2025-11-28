@@ -228,6 +228,9 @@ export default function VideoPage() {
           audio: true,
         });
 
+        // Register with global manager for robust cleanup
+        peerManager.registerLocalStream(stream);
+
         setLocalStream(stream);
         localStreamRef.current = stream;
         initializingRef.current = false;
@@ -328,7 +331,9 @@ export default function VideoPage() {
     initMedia();
 
     return () => {
-      // Robust cleanup
+      // Robust cleanup using global manager
+      peerManager.cleanupAllLocalStreams();
+
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => {
           track.stop();
