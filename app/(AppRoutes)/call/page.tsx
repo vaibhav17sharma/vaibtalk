@@ -42,6 +42,7 @@ export default function VideoPage() {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const initializingRef = useRef(false); // Lock to prevent double init
 
   // --- Helpers ---
 
@@ -217,8 +218,10 @@ export default function VideoPage() {
   useEffect(() => {
     const initMedia = async () => {
       try {
-        // Double check if we already have a stream to avoid re-requesting
-        if (localStreamRef.current) return;
+        // Double check if we already have a stream OR are initializing
+        if (localStreamRef.current || initializingRef.current) return;
+
+        initializingRef.current = true;
 
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
@@ -227,6 +230,7 @@ export default function VideoPage() {
 
         setLocalStream(stream);
         localStreamRef.current = stream;
+        initializingRef.current = false;
 
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
@@ -264,7 +268,6 @@ export default function VideoPage() {
             );
 
             // CRITICAL FIX: Ensure the existing call uses the NEW stream we just created
-            // Otherwise, toggling mute/video on 'stream' won't affect the call!
             if (existingCall.peerConnection) {
               const senders = existingCall.peerConnection.getSenders();
               const videoSender = senders.find(
@@ -318,6 +321,7 @@ export default function VideoPage() {
       } catch (error) {
         console.error("Error accessing media devices:", error);
         toast.error("Failed to access camera/microphone");
+        initializingRef.current = false;
       }
     };
 
@@ -333,6 +337,7 @@ export default function VideoPage() {
         localStreamRef.current = null;
       }
       setLocalStream(null);
+      initializingRef.current = false;
     };
   }, [activeContact]);
 
@@ -364,89 +369,92 @@ export default function VideoPage() {
   }
 
   return (
-    <div className="relative h-screen w-full bg-black overflow-hidden flex flex-col">
-      {/* Remote Video (Full Screen) */}
-      <div className="flex-1 relative">
-        {remoteStream ? (
-          <video
-            ref={remoteVideoRef}
-            autoPlay
-            playsInline
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <Avatar className="w-32 h-32 mx-auto mb-4 border-4 border-purple-500/50">
-                <AvatarImage src={activeContact.avatar} />
-                <AvatarFallback className="text-4xl">
-                  {(activeContact.name || activeContact.username)[0]}
-                </AvatarFallback>
-              </Avatar>
-              <p className="text-xl text-white animate-pulse">
-                Connecting to {activeContact.name}...
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Local Video (PIP) */}
-        <div className="absolute bottom-24 right-4 w-32 h-48 sm:w-48 sm:h-72 bg-gray-900 rounded-xl overflow-hidden shadow-2xl border border-white/10 transition-all hover:scale-105">
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover"
-          />
-          {!isVideoEnabled && !isScreenSharing && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
-              <Avatar className="w-12 h-12">
-                <AvatarImage src={session?.user?.image || ""} />
-                <AvatarFallback>{session?.user?.name?.[0]}</AvatarFallback>
-              </Avatar>
+    <div className="relative h-screen w-full bg-black overflow-hidden flex items-center justify-center p-0 md:p-4">
+      {/* Responsive Container: Full screen on mobile, Large card on desktop */}
+      <div className="relative w-full h-full md:max-w-6xl md:h-[90vh] md:rounded-3xl md:overflow-hidden md:border md:border-white/10 bg-zinc-900 shadow-2xl flex flex-col">
+        {/* Remote Video Area */}
+        <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+          {remoteStream ? (
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              className="w-full h-full object-contain bg-black" // object-contain preserves aspect ratio
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full w-full">
+              <div className="text-center">
+                <Avatar className="w-32 h-32 mx-auto mb-4 border-4 border-purple-500/50">
+                  <AvatarImage src={activeContact.avatar} />
+                  <AvatarFallback className="text-4xl">
+                    {(activeContact.name || activeContact.username)[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <p className="text-xl text-white animate-pulse">
+                  Connecting to {activeContact.name}...
+                </p>
+              </div>
             </div>
           )}
+
+          {/* Local Video (PIP) */}
+          <div className="absolute top-4 right-4 md:top-8 md:right-8 w-28 h-40 md:w-48 md:h-36 bg-gray-900 rounded-xl overflow-hidden shadow-2xl border border-white/10 transition-all hover:scale-105 z-10">
+            <video
+              ref={localVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover"
+            />
+            {!isVideoEnabled && !isScreenSharing && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                <Avatar className="w-10 h-10">
+                  <AvatarImage src={session?.user?.image || ""} />
+                  <AvatarFallback>{session?.user?.name?.[0]}</AvatarFallback>
+                </Avatar>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Controls */}
-      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-4 bg-black/60 backdrop-blur-md px-6 py-4 rounded-full border border-white/10">
-        <Button
-          variant={isAudioEnabled ? "ghost" : "destructive"}
-          size="icon"
-          className="rounded-full w-12 h-12"
-          onClick={toggleAudio}
-        >
-          {isAudioEnabled ? <Mic /> : <MicOff />}
-        </Button>
+        {/* Controls - Floating at bottom on mobile, Fixed at bottom of card on desktop */}
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-4 bg-black/60 backdrop-blur-md px-6 py-4 rounded-full border border-white/10 z-20 w-max">
+          <Button
+            variant={isAudioEnabled ? "ghost" : "destructive"}
+            size="icon"
+            className="rounded-full w-12 h-12"
+            onClick={toggleAudio}
+          >
+            {isAudioEnabled ? <Mic /> : <MicOff />}
+          </Button>
 
-        <Button
-          variant={isVideoEnabled ? "ghost" : "destructive"}
-          size="icon"
-          className="rounded-full w-12 h-12"
-          onClick={toggleVideo}
-        >
-          {isVideoEnabled ? <Video /> : <VideoOff />}
-        </Button>
+          <Button
+            variant={isVideoEnabled ? "ghost" : "destructive"}
+            size="icon"
+            className="rounded-full w-12 h-12"
+            onClick={toggleVideo}
+          >
+            {isVideoEnabled ? <Video /> : <VideoOff />}
+          </Button>
 
-        <Button
-          variant={isScreenSharing ? "secondary" : "ghost"}
-          size="icon"
-          className="rounded-full w-12 h-12"
-          onClick={toggleScreenShare}
-        >
-          {isScreenSharing ? <MonitorOff /> : <Monitor />}
-        </Button>
+          <Button
+            variant={isScreenSharing ? "secondary" : "ghost"}
+            size="icon"
+            className="rounded-full w-12 h-12"
+            onClick={toggleScreenShare}
+          >
+            {isScreenSharing ? <MonitorOff /> : <Monitor />}
+          </Button>
 
-        <Button
-          variant="destructive"
-          size="icon"
-          className="rounded-full w-14 h-14"
-          onClick={endCall}
-        >
-          <PhoneOff />
-        </Button>
+          <Button
+            variant="destructive"
+            size="icon"
+            className="rounded-full w-14 h-14"
+            onClick={endCall}
+          >
+            <PhoneOff />
+          </Button>
+        </div>
       </div>
     </div>
   );
